@@ -1,0 +1,149 @@
+import { db } from '@/lib/db';
+
+export interface ChannelListItem {
+  id: string;
+  name: string;
+  platform: string;
+  status: string;
+  lastSyncedAt: string | null;
+  followers: number | null;
+  healthScore: number | null;
+  // Avg reach per post (tính trên post_metric_daily 30 ngày gần nhất, một row/post)
+  avgReachPerPost: number | null;
+  // Engagement rate trung bình (đơn vị: tỉ lệ — render UI nhân 100 thành %)
+  avgEngagementRate: number | null;
+  // Tên người quản lý kênh (team_member.name) — null nếu chưa gán
+  ownerName: string | null;
+}
+
+export interface ChannelsListFilter {
+  platform?: string | null;
+  status?: string | null;
+  sort?: string | null;
+}
+
+const ALLOWED_SORT_COLUMNS: Record<string, string> = {
+  name: 'sa.name ASC',
+  health: 'ch.health_score DESC NULLS LAST',
+  followers: 'am.followers DESC NULLS LAST',
+};
+
+export async function fetchChannelsList(
+  filter: ChannelsListFilter
+): Promise<ChannelListItem[]> {
+  const sortClause = ALLOWED_SORT_COLUMNS[filter.sort ?? ''] ?? ALLOWED_SORT_COLUMNS.name;
+
+  const res = await db.query<{
+    id: string;
+    name: string;
+    platform: string;
+    status: string;
+    last_synced_at: string | null;
+    followers: string | null;
+    health_score: string | null;
+    avg_reach_per_post: string | null;
+    avg_engagement_rate: string | null;
+    owner_name: string | null;
+  }>(
+    `SELECT sa.id, sa.name, sa.platform, sa.status, sa.last_synced_at,
+            am.followers, ch.health_score,
+            pm.avg_reach_per_post, pm.avg_engagement_rate,
+            tm.name AS owner_name
+     FROM social_account sa
+     LEFT JOIN LATERAL (
+       SELECT followers FROM account_metric_daily
+       WHERE account_id = sa.id ORDER BY date DESC LIMIT 1
+     ) am ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT health_score FROM channel_health_daily
+       WHERE account_id = sa.id ORDER BY date DESC LIMIT 1
+     ) ch ON TRUE
+     -- Avg reach + ER trên post_metric_daily 30 ngày, lấy row mới nhất per-post
+     LEFT JOIN LATERAL (
+       SELECT AVG(p.reach)::INT             AS avg_reach_per_post,
+              AVG(p.engagement_rate)::NUMERIC AS avg_engagement_rate
+       FROM (
+         SELECT DISTINCT ON (sp.id) pmd.reach, pmd.engagement_rate
+         FROM social_post sp
+         JOIN post_metric_daily pmd ON pmd.post_id = sp.id
+         WHERE sp.account_id = sa.id
+           AND sp.published_at >= NOW() - INTERVAL '30 days'
+         ORDER BY sp.id, pmd.date DESC
+       ) p
+     ) pm ON TRUE
+     LEFT JOIN team_member tm ON tm.id = sa.owner_member_id
+     WHERE ($1::text IS NULL OR sa.platform = $1::platform_t)
+       AND (
+         -- Default: hide disconnected channels (deleted from user POV)
+         ($2::text IS NULL AND sa.status != 'disconnected')
+         -- Explicit filter: show only that status (incl. disconnected if requested)
+         OR ($2::text IS NOT NULL AND sa.status = $2::account_status_t)
+       )
+     ORDER BY ${sortClause}
+     LIMIT 100`,
+    [filter.platform ?? null, filter.status ?? null]
+  );
+
+  return res.rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    platform: row.platform,
+    status: row.status,
+    lastSyncedAt: row.last_synced_at,
+    followers: row.followers !== null ? Number(row.followers) : null,
+    healthScore: row.health_score !== null ? Number(row.health_score) : null,
+    avgReachPerPost:
+      row.avg_reach_per_post !== null ? Number(row.avg_reach_per_post) : null,
+    avgEngagementRate:
+      row.avg_engagement_rate !== null ? Number(row.avg_engagement_rate) : null,
+    ownerName: row.owner_name,
+  }));
+}
+
+// ─── Summary for KPI cards + tab counts ──────────────────────────────────
+// Excludes 'disconnected' channels (deleted from user POV) — same rule as fetchChannelsList default.
+
+export interface ChannelsSummary {
+  total: number;
+  active: number;
+  avgHealth: number | null;
+  byPlatform: Record<string, number>;
+}
+
+export async function fetchChannelsSummary(): Promise<ChannelsSummary> {
+  // Single round-trip: aggregate totals + per-platform counts in two CTEs.
+  const res = await db.query<{
+    total: string;
+    active: string;
+    avg_health: string | null;
+    by_platform: Record<string, number> | null;
+  }>(
+    `WITH base AS (
+       SELECT sa.platform, sa.status,
+              (SELECT health_score FROM channel_health_daily
+                 WHERE account_id = sa.id ORDER BY date DESC LIMIT 1) AS health_score
+       FROM social_account sa
+       WHERE sa.status != 'disconnected'
+     )
+     SELECT
+       COUNT(*)::text                                                AS total,
+       COUNT(*) FILTER (WHERE status = 'active')::text               AS active,
+       AVG(health_score)::text                                       AS avg_health,
+       (SELECT jsonb_object_agg(platform, cnt)
+          FROM (SELECT platform, COUNT(*)::int AS cnt
+                  FROM base GROUP BY platform) p)                    AS by_platform
+     FROM base`
+  );
+
+  const row = res.rows[0];
+  if (!row) {
+    return { total: 0, active: 0, avgHealth: null, byPlatform: {} };
+  }
+
+  return {
+    total: Number(row.total),
+    active: Number(row.active),
+    avgHealth: row.avg_health !== null ? Number(row.avg_health) : null,
+    byPlatform: row.by_platform ?? {},
+  };
+}
