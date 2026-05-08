@@ -16,6 +16,17 @@ export const config = {
 export default async function middleware(
   request: NextRequest
 ): Promise<NextResponse> {
+  // Root '/' is the public landing page — let it through unauthenticated.
+  // The page itself handles "already logged in" by redirecting to /dashboard,
+  // so middleware would only get in the way here.
+  //
+  // Why not exclude '/' in the matcher regex above? Next.js path-to-regexp
+  // can't anchor to "exactly /" without matching all subpaths too. Easier
+  // to short-circuit in the handler.
+  if (request.nextUrl.pathname === '/') {
+    return NextResponse.next();
+  }
+
   const sessionPassword = process.env.SESSION_PASSWORD;
 
   // If SESSION_PASSWORD is not configured, always redirect to login
