@@ -12,19 +12,30 @@
 
 import { LadipageError, type LadipageSuccessResponse } from './types';
 
-const WEBHOOK_URL = process.env.LADIPAGE_WEBHOOK_URL;
-const API_KEY = process.env.LADIPAGE_API_KEY;
 // Webhook n8n typically responds in 10-14s per page (it queries FB Graph API
 // + Ladipage DB internally). 30s gives ~2× headroom over the worst observed
 // case so transient slowness doesn't trip AbortController.
 const TIMEOUT_MS = 30_000;
 
-if (!WEBHOOK_URL || !API_KEY) {
-  // Fail fast at module load so missing config surfaces at server start
-  // rather than at 23:30 when the cron job fires.
-  throw new Error(
-    '[ladipage] LADIPAGE_WEBHOOK_URL and LADIPAGE_API_KEY env vars are required'
-  );
+/**
+ * Read + validate env vars on demand.
+ *
+ * NOT at module-load: Next.js build collects route metadata by importing
+ * every route's module chain in a build-time sandbox. If we threw here at
+ * import time, build would fail whenever LADIPAGE_* aren't present in the
+ * build environment (which is normal — secrets are runtime concerns).
+ * Throwing inside the function delays the check until the cron job actually
+ * runs, where missing config will surface as a clear error in the job log.
+ */
+function getConfig(): { webhookUrl: string; apiKey: string } {
+  const webhookUrl = process.env.LADIPAGE_WEBHOOK_URL;
+  const apiKey = process.env.LADIPAGE_API_KEY;
+  if (!webhookUrl || !apiKey) {
+    throw new Error(
+      '[ladipage] LADIPAGE_WEBHOOK_URL and LADIPAGE_API_KEY env vars are required'
+    );
+  }
+  return { webhookUrl, apiKey };
 }
 
 /**
@@ -40,16 +51,18 @@ export async function fetchLadipageCount(idPage: string): Promise<{
   count: number;
   raw: unknown;
 }> {
+  const { webhookUrl, apiKey } = getConfig();
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   let res: Response;
   try {
-    res = await fetch(WEBHOOK_URL!, {
+    res = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
         // Lowercase header name verified by curl — n8n auth check is case-sensitive
-        'api-key': API_KEY!,
+        'api-key': apiKey,
         'content-type': 'application/json',
       },
       body: JSON.stringify({ id_page: idPage }),
