@@ -1,9 +1,12 @@
+import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import type { TeamMemberKpi, MemberStatus } from '@/lib/queries/team-kpi';
 import { TeamRadarChart } from './team-radar-chart';
 
 interface TeamMemberCardProps {
   member: TeamMemberKpi;
+  /** Optional action slot rendered in the header (e.g. delete button). */
+  action?: ReactNode;
 }
 
 // Style của status badge — match palette với radar polygon trong cùng card.
@@ -25,7 +28,7 @@ const STATUS_STYLE: Record<
   },
 };
 
-export function TeamMemberCard({ member }: TeamMemberCardProps) {
+export function TeamMemberCard({ member, action }: TeamMemberCardProps) {
   const status = STATUS_STYLE[member.status];
 
   return (
@@ -64,6 +67,7 @@ export function TeamMemberCard({ member }: TeamMemberCardProps) {
           >
             {status.label}
           </span>
+          {action}
         </div>
       </div>
 
