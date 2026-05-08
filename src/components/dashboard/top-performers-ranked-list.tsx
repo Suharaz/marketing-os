@@ -1,9 +1,9 @@
 import { cn } from '@/lib/utils';
-import { PlatformIcon } from './platform-icon';
 import type { TopPerformerRow } from '@/lib/queries/dashboard-top-performers';
 
 interface Props {
   performers: TopPerformerRow[];
+  days: number; // dùng trong subtitle để khớp với TimeRangeSelector
 }
 
 // Background tint cho rank chip — gold/silver/bronze cho top 3, neutral cho phần còn lại.
@@ -23,11 +23,16 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
-export function TopPerformersRankedList({ performers }: Props) {
+export function TopPerformersRankedList({ performers, days }: Props) {
   return (
     <div className="rounded-xl bg-white ring-1 ring-zinc-200 shadow-sm p-5 h-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-zinc-700">Top Performers — Tuần này</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-700">Top Performers</h3>
+          <p className="text-[10px] text-zinc-400 mt-0.5">
+            {days} ngày qua · score tương đối với top
+          </p>
+        </div>
         <a href="/team" className="text-xs text-blue-600 hover:underline">
           View team →
         </a>
@@ -35,7 +40,9 @@ export function TopPerformersRankedList({ performers }: Props) {
 
       {performers.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-xs text-zinc-400 italic">Chưa có thành viên nào.</p>
+          <p className="text-xs text-zinc-400 italic text-center px-4">
+            Chưa có thành viên nào đăng bài trong kỳ này.
+          </p>
         </div>
       ) : (
         <ol className="flex flex-col divide-y divide-zinc-100 flex-1">
@@ -57,10 +64,6 @@ export function TopPerformersRankedList({ performers }: Props) {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold text-zinc-800 leading-tight">
                   {p.name}
-                </p>
-                <p className="flex items-center gap-1 truncate text-[10px] text-zinc-400 mt-0.5">
-                  <PlatformIcon platform={p.platform} size={10} />
-                  <span className="truncate">{p.role}</span>
                 </p>
               </div>
 
