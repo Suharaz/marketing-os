@@ -29,7 +29,8 @@ export type SyncTypeT =
   | 'page_insights'
   | 'posts'
   | 'health_recompute'
-  | 'manual_refresh';
+  | 'manual_refresh'
+  | 'ladipage';
 
 export type SyncStatusT = 'running' | 'success' | 'failed';
 
@@ -112,15 +113,20 @@ export interface ChannelHealthDaily {
   computed_at: Date;
 }
 
-export interface ManualConversion {
+export interface LandingPageConversion {
   id: string;
-  source_account_id: string | null;
-  source_post_id: string | null;
-  channel_label: string;
+  account_id: string;
+  occurred_date: Date | string;
   conversion_count: number;
-  revenue_vnd: number;
-  currency: string;
-  occurred_at: Date;
+  raw_response: Record<string, unknown> | null;
+  synced_at: Date;
+}
+
+export interface ManualRevenue {
+  id: string;
+  account_id: string;
+  amount_vnd: number;
+  occurred_date: Date | string;
   note: string | null;
   created_by: string | null;
   created_at: Date;

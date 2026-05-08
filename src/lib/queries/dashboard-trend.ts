@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 // reach + followers: SUM across accounts from account_metric_daily.
 // total_post: counted from social_post.published_at — page-insights cron sets
 // account_metric_daily.posts_count to 0 so we can't trust it there.
-// conversions: SUM(conversion_count) from manual_conversion grouped by occurred_at::date.
+// conversions: SUM(conversion_count) from landing_page_conversion grouped by occurred_date.
 export interface TrendDataPoint {
   date: string;
   reach: number;
@@ -42,12 +42,12 @@ export async function fetchTrendData(days: number): Promise<TrendDataPoint[]> {
       GROUP BY published_at::date
     ),
     conv_agg AS (
-      SELECT occurred_at::date AS date,
+      SELECT occurred_date AS date,
              SUM(conversion_count) AS conversions
-      FROM manual_conversion
-      WHERE occurred_at >= (CURRENT_DATE - $1::int)::timestamptz
-        AND occurred_at <  CURRENT_DATE::timestamptz
-      GROUP BY occurred_at::date
+      FROM landing_page_conversion
+      WHERE occurred_date >= CURRENT_DATE - $1::int
+        AND occurred_date <  CURRENT_DATE
+      GROUP BY occurred_date
     )
     -- FULL OUTER JOIN across all 3 sources so a date that appears in any
     -- source still produces a row (with 0 for missing series).

@@ -18,6 +18,7 @@ import { logSync } from '@/lib/sync/log-sync';
 import { callContext, type CallEntry } from '@/lib/sync/call-context';
 import { upsertAccountMetricDaily } from '@/lib/cron/upsert-helpers';
 import { toPtDateKey, getTodayUntilUtcSec } from '@/lib/fb/pt-date';
+import { syncLadipageForAccount } from '@/lib/ladipage/sync-account';
 import type { SocialAccount } from '@/lib/db-types';
 
 /** How far back to fetch posts (30 days) */
@@ -165,6 +166,28 @@ async function runManualSyncInner(accountId: string, calls: CallEntry[]): Promis
     await db.query(`UPDATE social_account SET last_synced_at = NOW() WHERE id = $1`, [
       accountId,
     ]);
+
+    // Ladipage piggyback — only for FB pages, since id_page maps to
+    // social_account.external_id (a FB Page ID). Helper never throws — it
+    // returns a status, so a Ladipage failure cannot fail the FB sync that
+    // already succeeded above.
+    if (account.platform === 'facebook') {
+      const ladi = await syncLadipageForAccount(accountId, account.external_id);
+      if (ladi.status === 'upserted') {
+        recordsUpserted += 1;
+        console.log(
+          `[runManualSync] Ladipage OK account=${accountId} count=${ladi.count}`
+        );
+      } else if (ladi.status === 'no_data') {
+        console.warn(
+          `[runManualSync] Ladipage skip account=${accountId} (no data yet)`
+        );
+      } else {
+        console.warn(
+          `[runManualSync] Ladipage failed account=${accountId} reason=${ladi.reason}`
+        );
+      }
+    }
 
     await logSync({
       syncType: 'manual_refresh',

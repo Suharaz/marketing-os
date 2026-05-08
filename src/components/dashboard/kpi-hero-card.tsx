@@ -16,25 +16,41 @@ interface KpiHeroCardProps {
   sparklineColor?: string;
 }
 
-function formatValue(value: number, format: KpiFormat): string {
-  if (format === 'currency') {
-    // Compact VND for KPI cards: 340.000.000 → "340M"
-    if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
-    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(0)}M`;
-    if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K`;
+/**
+ * Compact a number to "1.5M" / "340K" style with 1-decimal precision.
+ * Strips trailing ".0" so 1_000_000 renders as "1M" not "1.0M".
+ *
+ * Why .toFixed(1) instead of (0): 1_500_000 → toFixed(0) = "2" (rounds up
+ * and lies about 50% of the value). 1 decimal preserves the "and a half"
+ * meaning users actually care about for revenue and engagement counts.
+ */
+function compact(value: number): string {
+  let scaled: number;
+  let suffix: string;
+  if (value >= 1_000_000_000) {
+    scaled = value / 1_000_000_000;
+    suffix = 'B';
+  } else if (value >= 1_000_000) {
+    scaled = value / 1_000_000;
+    suffix = 'M';
+  } else if (value >= 1_000) {
+    scaled = value / 1_000;
+    suffix = 'K';
+  } else {
     return new Intl.NumberFormat('vi-VN').format(value);
   }
+  const rounded = scaled.toFixed(1);
+  const trimmed = rounded.endsWith('.0') ? rounded.slice(0, -2) : rounded;
+  return `${trimmed}${suffix}`;
+}
+
+function formatValue(value: number, format: KpiFormat): string {
   if (format === 'percent') {
     return `${value.toFixed(2)}%`;
   }
-  // number — compact for large values
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`;
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}K`;
-  }
-  return new Intl.NumberFormat('vi-VN').format(value);
+  // number + currency share the same compact rule — only the unit suffix differs
+  // (currency rendered without VND symbol here; subtitle/tooltip can show it).
+  return compact(value);
 }
 
 // Build an SVG polyline path from a numeric series. Coordinates are

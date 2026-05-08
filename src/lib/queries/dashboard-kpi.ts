@@ -1,11 +1,17 @@
 import { db } from '@/lib/db';
 
-// All KPIs over the last `days` days, EXCLUDING today (today is still syncing).
-// Previous-period delta compares against the prior `days`-day window of equal length.
+// All KPIs over the last `days` days.
+// Previous-period delta compares against the prior `days`-day window.
 //
 // Window math:
-//   current  = [CURRENT_DATE - days,    CURRENT_DATE)        ← exclusive of today
-//   previous = [CURRENT_DATE - 2*days,  CURRENT_DATE - days) ← prior equal window
+//   FB metrics (reach, ER, followers) — EXCLUDE today (still syncing from FB):
+//     current  = [CURRENT_DATE - days,    CURRENT_DATE)        ← exclusive of today
+//     previous = [CURRENT_DATE - 2*days,  CURRENT_DATE - days) ← prior equal window
+//
+//   Manual/auto VN metrics (conversions, revenue) — INCLUDE today (data is final
+//   the moment it's logged, no sync lag):
+//     current  = [CURRENT_DATE - days,    CURRENT_DATE]        ← inclusive of today
+//     previous = [CURRENT_DATE - 2*days,  CURRENT_DATE - days) ← prior equal window
 export interface KpiData {
   reach: number;
   reachPrev: number;
@@ -13,12 +19,14 @@ export interface KpiData {
   avgErPrev: number;
   conversions: number;
   conversionsPrev: number;
+  revenue: number;
+  revenuePrev: number;
   totalFollowers: number;
   totalFollowersPrev: number;
 }
 
 export async function fetchKpiData(days: number): Promise<KpiData> {
-  const [reachRes, erRes, convRes, followersRes] = await Promise.all([
+  const [reachRes, erRes, convRes, revenueRes, followersRes] = await Promise.all([
     db.query<{ reach: string; reach_prev: string }>(
       `
       SELECT
@@ -45,17 +53,33 @@ export async function fetchKpiData(days: number): Promise<KpiData> {
     `,
       [days]
     ),
-    // Conversions = SUM(conversion_count) from manual_conversion in window.
+    // Conversions (= leads) — SUM(conversion_count) from landing_page_conversion.
+    // INCLUDES today: cron pulls today's data at 23:30 VN, no extra sync delay.
     db.query<{ conv: string; conv_prev: string }>(
       `
       SELECT
         COALESCE(SUM(conversion_count) FILTER (
-          WHERE occurred_at >= CURRENT_DATE - $1::int AND occurred_at < CURRENT_DATE
+          WHERE occurred_date >= CURRENT_DATE - $1::int AND occurred_date <= CURRENT_DATE
         ), 0) AS conv,
         COALESCE(SUM(conversion_count) FILTER (
-          WHERE occurred_at >= CURRENT_DATE - ($1::int * 2) AND occurred_at < CURRENT_DATE - $1::int
+          WHERE occurred_date >= CURRENT_DATE - ($1::int * 2) AND occurred_date < CURRENT_DATE - $1::int
         ), 0) AS conv_prev
-      FROM manual_conversion
+      FROM landing_page_conversion
+    `,
+      [days]
+    ),
+    // Revenue — SUM(amount_vnd) from manual_revenue.
+    // INCLUDES today (entered manually, always final).
+    db.query<{ rev: string; rev_prev: string }>(
+      `
+      SELECT
+        COALESCE(SUM(amount_vnd) FILTER (
+          WHERE occurred_date >= CURRENT_DATE - $1::int AND occurred_date <= CURRENT_DATE
+        ), 0) AS rev,
+        COALESCE(SUM(amount_vnd) FILTER (
+          WHERE occurred_date >= CURRENT_DATE - ($1::int * 2) AND occurred_date < CURRENT_DATE - $1::int
+        ), 0) AS rev_prev
+      FROM manual_revenue
     `,
       [days]
     ),
@@ -87,6 +111,7 @@ export async function fetchKpiData(days: number): Promise<KpiData> {
   const reachRow = reachRes.rows[0];
   const erRow = erRes.rows[0];
   const convRow = convRes.rows[0];
+  const revenueRow = revenueRes.rows[0];
   const followersRow = followersRes.rows[0];
 
   return {
@@ -96,6 +121,8 @@ export async function fetchKpiData(days: number): Promise<KpiData> {
     avgErPrev: Number(erRow?.avg_er_prev ?? 0),
     conversions: Number(convRow?.conv ?? 0),
     conversionsPrev: Number(convRow?.conv_prev ?? 0),
+    revenue: Number(revenueRow?.rev ?? 0),
+    revenuePrev: Number(revenueRow?.rev_prev ?? 0),
     totalFollowers: Number(followersRow?.total_followers ?? 0),
     totalFollowersPrev: Number(followersRow?.total_followers_prev ?? 0),
   };

@@ -7,7 +7,7 @@ import {
   LayoutDashboard,
   Radio,
   BookOpen,
-  TrendingUp,
+  Wallet,
   Users,
   Inbox,
 } from 'lucide-react';
@@ -19,7 +19,7 @@ const BASE_ITEMS = [
   { href: '/briefs', label: 'Xưởng nội dung', icon: Inbox },
   { href: '/channels', label: 'Kênh', icon: Radio },
   { href: '/library', label: 'Thư viện', icon: BookOpen },
-  { href: '/conversions', label: 'Chuyển đổi', icon: TrendingUp },
+  { href: '/revenue', label: 'Doanh thu', icon: Wallet },
 ];
 
 const ADMIN_ITEMS = [

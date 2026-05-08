@@ -9,6 +9,7 @@ function isAllZero(data: KpiData): boolean {
     data.reach === 0 &&
     data.avgEr === 0 &&
     data.conversions === 0 &&
+    data.revenue === 0 &&
     data.totalFollowers === 0
   );
 }
@@ -33,16 +34,17 @@ export function KpiHeroGrid({ data, days, trend = [] }: KpiHeroGridProps) {
 
   // Single-series arrays for each card's sparkline.
   // engagement_rate isn't a column on trend → derive (engagement / reach * 100).
-  // conversions now has a real daily series — sourced from manual_conversion.
+  // Lead has a real daily series — sourced from landing_page_conversion.
+  // Revenue card has no sparkline (no trend series collected for manual_revenue yet).
   const reachSeries = trend.map((t) => t.reach);
   const erSeries = trend.map((t) =>
     t.reach > 0 ? (t.engagement / t.reach) * 100 : 0
   );
-  const convSeries = trend.map((t) => t.conversions);
+  const leadSeries = trend.map((t) => t.conversions);
   const followersSeries = trend.map((t) => t.followers);
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
       <KpiHeroCard
         title="Total Reach"
         icon="👁"
@@ -65,15 +67,24 @@ export function KpiHeroGrid({ data, days, trend = [] }: KpiHeroGridProps) {
         sparklineColor="#F97316"
       />
       <KpiHeroCard
-        title="Conversions"
+        title="Lead"
         icon="🎯"
         value={data.conversions}
         prevValue={data.conversionsPrev}
         format="number"
-        subtitle="attributed qua UTM"
+        subtitle="từ Ladipage"
         accentClass="border-l-4 border-l-green-400"
-        sparkline={convSeries}
+        sparkline={leadSeries}
         sparklineColor="#10B981"
+      />
+      <KpiHeroCard
+        title="Doanh thu"
+        icon="💰"
+        value={data.revenue}
+        prevValue={data.revenuePrev}
+        format="currency"
+        subtitle="nhập tay theo kênh"
+        accentClass="border-l-4 border-l-amber-400"
       />
       <KpiHeroCard
         title="Total Followers"
