@@ -1,6 +1,5 @@
 import { Metadata } from 'next';
-import { fetchKpiData } from '@/lib/queries/dashboard-kpi';
-import { fetchTrendData } from '@/lib/queries/dashboard-trend';
+import { getKpiData, getTrendData } from '@/lib/cache/dashboard-cache';
 import { fetchChannelHealth } from '@/lib/queries/dashboard-channel-health';
 import { fetchUnreadAlerts } from '@/lib/queries/alerts';
 import { fetchTopPerformers } from '@/lib/queries/dashboard-top-performers';
@@ -27,11 +26,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   // Fetch in parallel — independent queries, no shared state.
   const [kpi, trend, health, alerts, topPerformers] = await Promise.all([
-    fetchKpiData(days),
-    fetchTrendData(days),
+    getKpiData(days),
+    getTrendData(days),
     fetchChannelHealth(),
     fetchUnreadAlerts(10),
-    fetchTopPerformers(5),
+    fetchTopPerformers(days, 5),
   ]);
 
   return (
@@ -64,7 +63,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       {/* Tier 3: Top Performers / Alerts / Active Campaigns.
           On <lg, stack full-width. On md, 2-col with campaigns wrapping. */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <TopPerformersRankedList performers={topPerformers} />
+        <TopPerformersRankedList performers={topPerformers} days={days} />
         <AlertsFeed initialData={alerts} />
         <ActiveCampaignsList />
       </div>

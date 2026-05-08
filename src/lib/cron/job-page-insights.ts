@@ -11,6 +11,7 @@ import { getTodayUntilUtcSec } from '@/lib/fb/pt-date';
 import { startSyncLog, finishSyncLog } from '@/lib/cron/sync-log';
 import { upsertAccountMetricDaily } from '@/lib/cron/upsert-helpers';
 import { handleAccountError } from '@/lib/cron/account-error-handler';
+import { invalidateDashboard } from '@/lib/cache/dashboard-cache';
 import type { AccountMetricDailyRow } from '@/lib/cron/upsert-helpers';
 
 interface ActiveAccount {
@@ -110,6 +111,8 @@ export async function runPageInsightsJob(): Promise<void> {
     totalRecords,
     jobError
   );
+
+  if (totalRecords > 0) invalidateDashboard();
 
   console.log(`[job-page-insights] Done — ${totalRecords} rows upserted`);
 }

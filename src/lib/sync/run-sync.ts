@@ -19,6 +19,7 @@ import { callContext, type CallEntry } from '@/lib/sync/call-context';
 import { upsertAccountMetricDaily } from '@/lib/cron/upsert-helpers';
 import { toPtDateKey, getTodayUntilUtcSec } from '@/lib/fb/pt-date';
 import { syncLadipageForAccount } from '@/lib/ladipage/sync-account';
+import { invalidateDashboard } from '@/lib/cache/dashboard-cache';
 import type { SocialAccount } from '@/lib/db-types';
 
 /** How far back to fetch posts (30 days) */
@@ -197,6 +198,11 @@ async function runManualSyncInner(accountId: string, calls: CallEntry[]): Promis
       recordsUpserted,
       details: calls,
     });
+
+    // Manual sync writes to social_post + post_metric_daily + account_metric_daily
+    // (and possibly landing_page_conversion via the Ladipage piggyback) — drop
+    // the dashboard cache so the user sees fresh numbers immediately.
+    invalidateDashboard();
 
     return recordsUpserted;
   } catch (err) {

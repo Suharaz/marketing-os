@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import Link from 'next/link';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { fetchRecentRevenue } from '@/lib/queries/revenue';
+import { getRecentRevenue } from '@/lib/cache/dashboard-cache';
 import { RevenueTable } from './revenue-table';
 
 export const metadata: Metadata = {
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function RevenuePage() {
-  const rows = await fetchRecentRevenue(50);
+  const rows = await getRecentRevenue(50);
 
   return (
     <div className="flex flex-col gap-6">

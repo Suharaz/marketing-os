@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { deleteRevenue } from '@/lib/queries/revenue';
+import { invalidateDashboard } from '@/lib/cache/dashboard-cache';
 
 export const runtime = 'nodejs';
 
@@ -29,6 +30,7 @@ export async function DELETE(
 
   try {
     await deleteRevenue(id);
+    invalidateDashboard();
     return NextResponse.json({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Internal error';

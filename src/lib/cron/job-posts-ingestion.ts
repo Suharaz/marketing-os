@@ -14,6 +14,7 @@ import {
   upsertPostMetricDaily,
 } from '@/lib/cron/upsert-helpers';
 import { handleAccountError } from '@/lib/cron/account-error-handler';
+import { invalidateDashboard } from '@/lib/cache/dashboard-cache';
 import type { SocialPostRow, PostMetricDailyRow } from '@/lib/cron/upsert-helpers';
 
 interface ActiveAccount {
@@ -136,6 +137,8 @@ export async function runPostsIngestionJob(): Promise<void> {
     totalRecords,
     jobError
   );
+
+  if (totalRecords > 0) invalidateDashboard();
 
   console.log(`[job-posts-ingestion] Done — ${totalRecords} metric rows upserted`);
 }

@@ -3,23 +3,18 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: 'standalone',
 
-  // Router cache (RSC payload kept in browser memory across navigations).
+  // Router cache (RSC payload kept in browser memory).
   //
-  // Default in Next.js 15+: dynamic = 0, static = 180. Dynamic routes refetch
-  // on every navigation — back/forward feels like a fresh page load even
-  // though the data hasn't changed. With these values, navigating back to a
-  // recently visited page reuses the cached RSC payload and is instant.
+  // The heavy lifting happens server-side via tag-based invalidation in
+  // lib/cache/dashboard-cache.ts — that cache lives until cron jobs or
+  // mutations actually change the underlying data, regardless of clock time.
   //
-  //   dynamic: 30 — cache RSC for dynamic pages (auth, db queries) for 30s.
-  //                 Marketing dashboards refresh from cron at 23:30 daily,
-  //                 30s of staleness is invisible.
-  //   static:  180 — keep static-generated routes (login page, etc.) for 3min.
-  //
-  // Mutations (POST/DELETE handlers + router.refresh()) bypass this cache,
-  // so add/delete actions still update the UI immediately.
+  // The client router cache is here as a small comfort layer: 60s lets
+  // back/forward navigation feel instant without showing data older than the
+  // server cache itself would.
   experimental: {
     staleTimes: {
-      dynamic: 30,
+      dynamic: 60,
       static: 180,
     },
   },

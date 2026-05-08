@@ -6,6 +6,7 @@
 import { db } from '@/lib/db';
 import { syncLadipageForAccount, todayInVn } from '@/lib/ladipage/sync-account';
 import { startSyncLog, finishSyncLog } from '@/lib/cron/sync-log';
+import { invalidateDashboard } from '@/lib/cache/dashboard-cache';
 
 interface ActiveFbAccount {
   id: string;
@@ -83,6 +84,11 @@ export async function runLadipageSyncJob(): Promise<void> {
     upserted,
     jobError
   );
+
+  // Drop dashboard cache so the new lead numbers show on the next page load.
+  // Always called even when upserted=0 — schema-level changes (e.g. backfill)
+  // could still warrant a refresh, and revalidateTag is cheap on a cold cache.
+  if (upserted > 0) invalidateDashboard();
 
   console.log(
     `[job-ladipage] Done — upserted=${upserted} skipped=${skipped} failed=${failed}`

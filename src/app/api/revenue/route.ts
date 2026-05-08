@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { fetchRecentRevenue, createRevenue } from '@/lib/queries/revenue';
 import { revenueInputSchema } from '@/lib/validation/revenue-schema';
+import { invalidateDashboard } from '@/lib/cache/dashboard-cache';
 
 export const runtime = 'nodejs';
 
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   try {
     const id = await createRevenue(parsed.data, user.userId);
+    invalidateDashboard();
     return NextResponse.json({ id }, { status: 201 });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Internal error';
