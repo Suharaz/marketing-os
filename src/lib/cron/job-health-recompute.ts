@@ -155,33 +155,34 @@ export async function runHealthRecomputeForAccount(accountId: string): Promise<v
 }
 
 export async function runHealthRecomputeJob(): Promise<void> {
-  const logId = await startSyncLog('health_recompute');
   let totalRecords = 0;
-  let jobError: string | null = null;
 
+  let accounts: ActiveAccount[];
   try {
-    const accounts = await loadActiveAccounts();
-    console.log(`[job-health-recompute] Processing ${accounts.length} active accounts`);
-
-    for (const acc of accounts) {
-      try {
-        await runHealthRecomputeForAccount(acc.id);
-        totalRecords++;
-      } catch (err) {
-        await handleAccountError(acc.id, err);
-      }
-    }
+    accounts = await loadActiveAccounts();
   } catch (err) {
-    jobError = err instanceof Error ? err.message : String(err);
-    console.error('[job-health-recompute] Fatal job error:', err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[job-health-recompute] Fatal: load accounts failed:', err);
+    const fallbackLogId = await startSyncLog('health_recompute');
+    await finishSyncLog(fallbackLogId, 'failed', 0, errMsg);
+    return;
   }
 
-  await finishSyncLog(
-    logId,
-    jobError ? 'failed' : 'success',
-    totalRecords,
-    jobError
-  );
+  console.log(`[job-health-recompute] Processing ${accounts.length} active accounts`);
+
+  for (const acc of accounts) {
+    // Per-account log: records=1 (1 health row upserted) khi success
+    const logId = await startSyncLog('health_recompute', acc.id);
+    try {
+      await runHealthRecomputeForAccount(acc.id);
+      totalRecords++;
+      await finishSyncLog(logId, 'success', 1);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      await finishSyncLog(logId, 'failed', 0, errMsg);
+      await handleAccountError(acc.id, err);
+    }
+  }
 
   console.log(`[job-health-recompute] Done — ${totalRecords} accounts scored`);
 }

@@ -31,22 +31,39 @@ async function loadActiveFbAccounts(): Promise<ActiveFbAccount[]> {
 /**
  * Run the Ladipage sync job. Safe to call manually for backfill or testing.
  * Exported for use in cron/init.ts and any future run-once CLI script.
+ *
+ * Logging: ghi 1 row api_sync_log per account. Status mapping:
+ *   - upserted → success, records=count
+ *   - no_data  → success, records=0 (đã chạy, không có data — không phải lỗi)
+ *   - failed   → failed, errorMessage=reason
  */
 export async function runLadipageSyncJob(): Promise<void> {
   const occurredDate = todayInVn();
-  const logId = await startSyncLog('ladipage');
   let upserted = 0;
   let skipped = 0;
   let failed = 0;
-  let jobError: string | null = null;
 
+  let accounts: ActiveFbAccount[];
   try {
-    const accounts = await loadActiveFbAccounts();
-    console.log(
-      `[job-ladipage] Starting batch — ${accounts.length} accounts, occurred_date=${occurredDate}`
-    );
+    accounts = await loadActiveFbAccounts();
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[job-ladipage] Fatal: load accounts failed:', err);
+    const fallbackLogId = await startSyncLog('ladipage');
+    await finishSyncLog(fallbackLogId, 'failed', 0, errMsg);
+    return;
+  }
 
-    for (const account of accounts) {
+  console.log(
+    `[job-ladipage] Starting batch — ${accounts.length} accounts, occurred_date=${occurredDate}`
+  );
+
+  for (const account of accounts) {
+    const logId = await startSyncLog('ladipage', account.id);
+
+    // syncLadipageForAccount KHÔNG throw — luôn trả LadipageSyncResult,
+    // nên không cần try/catch ở đây. Vẫn wrap để đề phòng lỗi DB ngoài kế hoạch.
+    try {
       const result = await syncLadipageForAccount(
         account.id,
         account.external_id,
@@ -55,35 +72,35 @@ export async function runLadipageSyncJob(): Promise<void> {
 
       if (result.status === 'upserted') {
         upserted++;
+        await finishSyncLog(logId, 'success', result.count ?? 0);
         console.log(
           `[job-ladipage] OK ${account.name} (${account.external_id}): count=${result.count}`
         );
       } else if (result.status === 'no_data') {
         skipped++;
+        await finishSyncLog(logId, 'success', 0);
         console.warn(
           `[job-ladipage] SKIP ${account.name} (${account.external_id}): no Ladipage data yet`
         );
       } else {
         failed++;
+        await finishSyncLog(logId, 'failed', 0, result.reason ?? 'unknown');
         console.error(
           `[job-ladipage] FAIL ${account.name} (${account.external_id}): ${result.reason ?? 'unknown'}`
         );
       }
-
-      // Throttle between calls to avoid hammering the n8n webhook
-      await sleep(DELAY_BETWEEN_CALLS_MS);
+    } catch (err) {
+      failed++;
+      const errMsg = err instanceof Error ? err.message : String(err);
+      await finishSyncLog(logId, 'failed', 0, errMsg);
+      console.error(
+        `[job-ladipage] EXCEPTION ${account.name} (${account.external_id}): ${errMsg}`
+      );
     }
-  } catch (err) {
-    jobError = err instanceof Error ? err.message : String(err);
-    console.error('[job-ladipage] Fatal job error:', err);
-  }
 
-  await finishSyncLog(
-    logId,
-    jobError ? 'failed' : 'success',
-    upserted,
-    jobError
-  );
+    // Throttle between calls to avoid hammering the n8n webhook
+    await sleep(DELAY_BETWEEN_CALLS_MS);
+  }
 
   // Drop dashboard cache so the new lead numbers show on the next page load.
   // Always called even when upserted=0 — schema-level changes (e.g. backfill)

@@ -58,59 +58,66 @@ function toMetricRows(
 /**
  * Run the page insights ingestion job.
  * Exported for use in cron/init.ts and the run-job-once CLI script.
+ *
+ * Logging: ghi 1 row api_sync_log per account để trang chi tiết kênh
+ * (`fetchSyncLog` filter theo account_id) thấy được lịch sử cron.
+ * Nếu fatal trước vòng lặp (load accounts fail) → ghi 1 batch row
+ * account_id=NULL để không mất visibility.
  */
 export async function runPageInsightsJob(): Promise<void> {
-  const logId = await startSyncLog('page_insights');
   let totalRecords = 0;
-  let jobError: string | null = null;
 
+  let accounts: ActiveAccount[];
   try {
-    const accounts = await loadActiveAccounts();
-    console.log(`[job-page-insights] Processing ${accounts.length} active accounts`);
-
-    for (const acc of accounts) {
-      try {
-        const token = await decryptToken(acc.access_token_encrypted);
-        const since = unixDaysAgo(2);
-        // until = todayT08:00:00+0000 — đảm bảo FB include row finalised gần
-        // nhất, không cắt mất ngày cuối nếu cron chạy trước PT-midnight rollover.
-        const until = getTodayUntilUtcSec();
-
-        // Single /insights call covers all 8 metrics (incl. page_follows for followers count)
-        const rawInsights = await fetchPageInsights(
-          token,
-          acc.external_id,
-          since,
-          until
-        );
-        const parsed = parseInsights(rawInsights);
-        const rows = toMetricRows(acc.id, parsed);
-
-        const upserted = await upsertAccountMetricDaily(rows);
-        totalRecords += upserted;
-
-        // Update last_synced_at on success
-        await db.query(
-          `UPDATE social_account SET last_synced_at = NOW() WHERE id = $1`,
-          [acc.id]
-        );
-
-        console.log(`[job-page-insights] Account ${acc.id}: upserted ${upserted} rows`);
-      } catch (err) {
-        await handleAccountError(acc.id, err);
-      }
-    }
+    accounts = await loadActiveAccounts();
   } catch (err) {
-    jobError = err instanceof Error ? err.message : String(err);
-    console.error('[job-page-insights] Fatal job error:', err);
+    // Fatal trước khi có account nào — ghi batch log fallback (account_id=NULL)
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[job-page-insights] Fatal: load accounts failed:', err);
+    const fallbackLogId = await startSyncLog('page_insights');
+    await finishSyncLog(fallbackLogId, 'failed', 0, errMsg);
+    return;
   }
 
-  await finishSyncLog(
-    logId,
-    jobError ? 'failed' : 'success',
-    totalRecords,
-    jobError
-  );
+  console.log(`[job-page-insights] Processing ${accounts.length} active accounts`);
+
+  for (const acc of accounts) {
+    // Mỗi account = 1 log row riêng → channel detail page query được
+    const logId = await startSyncLog('page_insights', acc.id);
+    try {
+      const token = await decryptToken(acc.access_token_encrypted);
+      const since = unixDaysAgo(2);
+      // until = todayT08:00:00+0000 — đảm bảo FB include row finalised gần
+      // nhất, không cắt mất ngày cuối nếu cron chạy trước PT-midnight rollover.
+      const until = getTodayUntilUtcSec();
+
+      // Single /insights call covers all 8 metrics (incl. page_follows for followers count)
+      const rawInsights = await fetchPageInsights(
+        token,
+        acc.external_id,
+        since,
+        until
+      );
+      const parsed = parseInsights(rawInsights);
+      const rows = toMetricRows(acc.id, parsed);
+
+      const upserted = await upsertAccountMetricDaily(rows);
+      totalRecords += upserted;
+
+      // Update last_synced_at on success
+      await db.query(
+        `UPDATE social_account SET last_synced_at = NOW() WHERE id = $1`,
+        [acc.id]
+      );
+
+      await finishSyncLog(logId, 'success', upserted);
+      console.log(`[job-page-insights] Account ${acc.id}: upserted ${upserted} rows`);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      await finishSyncLog(logId, 'failed', 0, errMsg);
+      await handleAccountError(acc.id, err);
+    }
+  }
 
   if (totalRecords > 0) invalidateDashboard();
 
