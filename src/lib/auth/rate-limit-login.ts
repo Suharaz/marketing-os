@@ -26,6 +26,12 @@ function getEntry(email: string): RateLimitEntry {
     return { count: 0, firstAttemptAt: now, lockedUntil: 0 };
   }
 
+  // Lockout đã hết hạn → reset count, cho user thử lại từ đầu.
+  // Nếu không reset, count cũ vẫn >= THRESHOLD → fail tiếp theo sẽ lock ngay.
+  if (entry.lockedUntil > 0 && entry.lockedUntil <= now) {
+    return { count: 0, firstAttemptAt: now, lockedUntil: 0 };
+  }
+
   return entry;
 }
 

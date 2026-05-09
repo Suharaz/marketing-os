@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
-import { ChevronUp, LogOut } from 'lucide-react';
+import { ChevronUp, LogOut, Settings } from 'lucide-react';
 
 interface Props {
   user: SessionData;
@@ -68,6 +68,11 @@ export function UserMenu({ user }: Props) {
             </div>
           </DropdownMenuLabel>
         </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => router.push('/settings/account')}>
+          <Settings className="size-4" />
+          Cài đặt tài khoản
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={handleLogout}>
           <LogOut className="size-4" />

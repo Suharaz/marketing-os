@@ -6,6 +6,7 @@ import { TeamKpiSummaryCards } from '@/components/team/team-kpi-summary';
 import { TeamMemberGrid } from '@/components/team/team-member-grid';
 import { AddMemberDialog } from './add-member-dialog';
 import { DeleteMemberButton } from './delete-member-button';
+import { ResetPasswordDialog } from './reset-password-dialog';
 
 export const metadata: Metadata = {
   title: 'Team — Marketing OS',
@@ -45,7 +46,10 @@ export default async function TeamPage() {
           isAdmin
             ? (m) =>
                 m.id !== currentUserId ? (
-                  <DeleteMemberButton id={m.id} name={m.name} />
+                  <div className="flex items-center gap-1.5">
+                    <ResetPasswordDialog id={m.id} name={m.name} />
+                    <DeleteMemberButton id={m.id} name={m.name} />
+                  </div>
                 ) : null
             : undefined
         }
