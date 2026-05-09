@@ -24,15 +24,21 @@ export function TeamKpiSummaryCards({ data }: TeamKpiSummaryProps) {
         label="ĐIỂM TRUNG BÌNH"
         value={data.avgScore.toFixed(1)}
         sub={
-          <span
-            className={cn(
-              'inline-flex items-center gap-0.5 font-semibold',
-              isPositive ? 'text-green-600' : 'text-red-500'
-            )}
-          >
-            {isPositive ? '↑' : '↓'} {Math.abs(data.avgScoreDelta).toFixed(1)} so
-            với tuần trước
-          </span>
+          // Phase 1: delta = 0 means "no snapshot yet"; UI hides arrow until
+          // Phase 2 ships the weekly snapshot table.
+          data.avgScoreDelta === 0 ? (
+            <span className="text-zinc-400">(coming soon)</span>
+          ) : (
+            <span
+              className={cn(
+                'inline-flex items-center gap-0.5 font-semibold',
+                isPositive ? 'text-green-600' : 'text-red-500'
+              )}
+            >
+              {isPositive ? '↑' : '↓'} {Math.abs(data.avgScoreDelta).toFixed(1)} so
+              với tuần trước
+            </span>
+          )
         }
       />
 
@@ -44,7 +50,11 @@ export function TeamKpiSummaryCards({ data }: TeamKpiSummaryProps) {
         sub={
           <span className="text-zinc-500">
             {data.topPerformer.score.toFixed(1)} điểm ·{' '}
-            {data.topPerformer.streakWeeks} tuần liên tiếp
+            {data.topPerformer.streakWeeks === 0 ? (
+              <span className="text-zinc-400">streak (coming soon)</span>
+            ) : (
+              `${data.topPerformer.streakWeeks} tuần liên tiếp`
+            )}
           </span>
         }
       />

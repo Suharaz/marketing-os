@@ -1,7 +1,12 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import type { TeamMemberKpi, MemberStatus } from '@/lib/queries/team-kpi';
+import { EMPTY_ROLE_LABEL } from '@/lib/queries/team-kpi';
 import { TeamRadarChart } from './team-radar-chart';
+
+// Neutral palette for unmeasured members — distinct from coach (rose) so admins
+// don't mistake "no data yet" for "underperforming".
+const EMPTY_BADGE_CLS = 'bg-zinc-100 text-zinc-500 ring-1 ring-zinc-200';
 
 interface TeamMemberCardProps {
   member: TeamMemberKpi;
@@ -30,6 +35,7 @@ const STATUS_STYLE: Record<
 
 export function TeamMemberCard({ member, action }: TeamMemberCardProps) {
   const status = STATUS_STYLE[member.status];
+  const isEmpty = member.roleLabel === EMPTY_ROLE_LABEL;
 
   return (
     <div className="flex flex-col gap-4 rounded-xl bg-white p-5 ring-1 ring-zinc-200 shadow-sm">
@@ -62,10 +68,10 @@ export function TeamMemberCard({ member, action }: TeamMemberCardProps) {
           <span
             className={cn(
               'inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold',
-              status.cls
+              isEmpty ? EMPTY_BADGE_CLS : status.cls
             )}
           >
-            {status.label}
+            {isEmpty ? 'CHƯA CÓ DATA' : status.label}
           </span>
           {action}
         </div>
