@@ -22,9 +22,11 @@ const MAX_PAGES = 10;
 
 /** Throttle window between consecutive FB calls (paging hops, sequential
  *  metric probes, pipeline stages). Randomised to avoid traffic patterns
- *  that look like a script — FB's anti-abuse heuristics dislike fixed cadence. */
-const FB_DELAY_MIN_MS = 3_000;
-const FB_DELAY_MAX_MS = 7_000;
+ *  that look like a script — FB's anti-abuse heuristics dislike fixed cadence.
+ *  Raised from 3-7s → 25-45s to let FB backend cool down on heavy field
+ *  expansion (insights + comments + reactions + nested attachments). */
+const FB_DELAY_MIN_MS = 25_000;
+const FB_DELAY_MAX_MS = 45_000;
 
 /** Sleep a uniformly-random amount in [FB_DELAY_MIN_MS, FB_DELAY_MAX_MS).
  *  Exported so callers (run-sync, cron jobs) can space their pipeline stages
@@ -280,7 +282,10 @@ export async function fetchPagePosts(
   const baseParams = {
     since: String(since),
     until: String(until),
-    limit: '100',
+    // Lowered from 100 → 25 to avoid FB error (#1) "reduce data" on heavy
+    // field expansion (insights + comments + reactions + nested attachments).
+    // Cap is now MAX_PAGES * 25 = 250 posts/sync.
+    limit: '25',
   };
 
   // Try full field expansion first (1 call returns everything per page)

@@ -87,10 +87,11 @@ export function ChannelHeader({
         return;
       }
 
-      const data = await res.json() as { recordsUpserted?: number };
-      toast.success(`Đồng bộ thành công — ${data.recordsUpserted ?? 0} bản ghi.`);
+      // Backend trả 202 (fire-and-forget): sync chạy background, có thể mất vài phút.
+      // Kết quả thực tế sẽ phản ánh ở "Lần sync cuối" sau khi user refresh trang.
+      const data = await res.json() as { message?: string; status?: string };
+      toast.info(data.message ?? 'Đang đồng bộ ở phía sau — vài phút nữa kết quả sẽ cập nhật.');
       setCooldownUntil(Date.now() + 60_000);
-      router.refresh();
     } catch {
       toast.error('Lỗi kết nối. Thử lại sau.');
     } finally {

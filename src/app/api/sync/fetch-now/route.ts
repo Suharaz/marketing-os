@@ -52,19 +52,28 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  try {
-    const recordsUpserted = await runManualSync(accountId);
-    return NextResponse.json({ ok: true, recordsUpserted });
-  } catch (err) {
+  // Fire-and-forget: spawn sync in the background, return 202 immediately.
+  // Sync can take 5-15 minutes due to FB throttle (25-45s between calls) +
+  // pagination + insights + ladipage stages. Blocking the HTTP response
+  // would tie up the connection and force the client to wait.
+  // Errors (including TokenExpiredError) are logged into api_sync_log by
+  // runManualSync itself — clients should poll that table for final status.
+  void runManualSync(accountId).catch((err) => {
     if (err instanceof TokenExpiredError) {
-      return NextResponse.json(
-        { error: 'Page token expired — please reconnect the channel' },
-        { status: 401 }
-      );
+      console.warn(`[POST /api/sync/fetch-now] Token expired for ${accountId}`);
+      return;
     }
-
     const message = err instanceof Error ? err.message : 'Sync failed';
-    console.error('[POST /api/sync/fetch-now] Error:', message);
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
+    console.error(`[POST /api/sync/fetch-now] Background sync failed for ${accountId}:`, message);
+  });
+
+  return NextResponse.json(
+    {
+      ok: true,
+      status: 'processing',
+      message: 'Đang đồng bộ ở phía sau — kết quả sẽ cập nhật trong vài phút',
+      accountId,
+    },
+    { status: 202 }
+  );
 }
