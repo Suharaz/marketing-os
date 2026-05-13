@@ -36,6 +36,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/migrations ./migrations
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/run-migrations.cjs ./scripts/run-migrations.cjs
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/seed-admin.cjs ./scripts/seed-admin.cjs
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/server-wrapper.cjs ./scripts/server-wrapper.cjs
 # hash-password.ts is a dev utility (requires tsx) — not copied to runner image.
 
 # Copy pg module needed at runtime for run-migrations.cjs
@@ -55,7 +56,9 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "fetch('http://localhost:3000').then(r=>process.exit(r.ok||r.status===307||r.status===302?0:1)).catch(()=>process.exit(1))"
 
-# Run migrations + seed admin user, then start the Next.js server.
-# All three steps run in-container so DATABASE_URL is available and the
-# admin team_member is provisioned from ADMIN_PASSWORD_HASH on first boot.
-CMD ["sh", "-c", "node scripts/run-migrations.cjs && node scripts/seed-admin.cjs && node server.js"]
+# Run migrations + seed admin user, then start the Next.js server via the
+# wrapper that forces instrumentation.register() to fire in-process.
+# Next 16 standalone + Turbopack does not reliably auto-invoke the hook
+# (verified in prod: container logs missing the "[cron] N jobs scheduled"
+# line entirely), so we wrap server.js to load instrumentation ourselves.
+CMD ["sh", "-c", "node scripts/run-migrations.cjs && node scripts/seed-admin.cjs && node scripts/server-wrapper.cjs"]
