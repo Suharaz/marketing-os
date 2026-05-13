@@ -1,7 +1,9 @@
 'use client';
 
 // Client table — server-rendered rows nhưng cần useState cho expand/collapse
-// nên đặt riêng. Server page truyền rows xuống dưới dạng prop.
+// nên đặt riêng. Server page truyền rows (không có details) xuống. Details
+// JSONB fetch on-demand qua API khi user expand 1 row, tránh kéo MB data
+// vào RSC payload mỗi lần load trang.
 
 import { Fragment, useState } from 'react';
 import {
@@ -71,14 +73,48 @@ function StatusBadge({ status }: { status: SyncStatusT }) {
   );
 }
 
+type DetailState =
+  | { status: 'loading' }
+  | { status: 'loaded'; calls: CallEntry[] }
+  | { status: 'error'; message: string };
+
 export function CronLogTable({ rows }: { rows: CronHistoryRow[] }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [detailsCache, setDetailsCache] = useState<Map<string, DetailState>>(
+    new Map()
+  );
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+        // Fetch details lần đầu mở row, sau đó cache lại.
+        if (!detailsCache.has(id)) {
+          setDetailsCache((m) => new Map(m).set(id, { status: 'loading' }));
+          fetch(`/api/admin/cron-logs/${id}/details`)
+            .then(async (res) => {
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              const data = (await res.json()) as { details: CallEntry[] | null };
+              setDetailsCache((m) =>
+                new Map(m).set(id, {
+                  status: 'loaded',
+                  calls: data.details ?? [],
+                })
+              );
+            })
+            .catch((err) => {
+              setDetailsCache((m) =>
+                new Map(m).set(id, {
+                  status: 'error',
+                  message: err instanceof Error ? err.message : 'Load failed',
+                })
+              );
+            });
+        }
+      }
       return next;
     });
   };
@@ -109,8 +145,8 @@ export function CronLogTable({ rows }: { rows: CronHistoryRow[] }) {
       <TableBody>
         {rows.map((r) => {
           const isOpen = expanded.has(r.id);
-          const callCount = r.details?.length ?? 0;
-          const hasDetails = r.details !== null;
+          const hasDetails = r.hasDetails;
+          const detailState = detailsCache.get(r.id);
           return (
             <Fragment key={r.id}>
               <TableRow
@@ -147,7 +183,7 @@ export function CronLogTable({ rows }: { rows: CronHistoryRow[] }) {
                   {formatDuration(r.durationMs)}
                 </TableCell>
                 <TableCell className="text-xs text-zinc-600">
-                  {hasDetails ? `${callCount} call${callCount === 1 ? '' : 's'}` : '—'}
+                  {hasDetails ? 'Xem' : '—'}
                 </TableCell>
                 <TableCell
                   className="text-xs text-red-600 max-w-[260px] truncate"
@@ -159,7 +195,7 @@ export function CronLogTable({ rows }: { rows: CronHistoryRow[] }) {
               {isOpen && hasDetails && (
                 <TableRow className="bg-zinc-50">
                   <TableCell colSpan={9} className="p-0">
-                    <CallDetails calls={r.details ?? []} />
+                    <DetailPanel state={detailState} />
                   </TableCell>
                 </TableRow>
               )}
@@ -169,6 +205,24 @@ export function CronLogTable({ rows }: { rows: CronHistoryRow[] }) {
       </TableBody>
     </Table>
   );
+}
+
+function DetailPanel({ state }: { state: DetailState | undefined }) {
+  if (!state || state.status === 'loading') {
+    return (
+      <div className="p-4 text-xs text-zinc-500 flex items-center gap-2">
+        <Loader2 className="size-3 animate-spin" /> Đang tải chi tiết...
+      </div>
+    );
+  }
+  if (state.status === 'error') {
+    return (
+      <div className="p-4 text-xs text-red-600">
+        Lỗi tải chi tiết: {state.message}
+      </div>
+    );
+  }
+  return <CallDetails calls={state.calls} />;
 }
 
 function CallDetails({ calls }: { calls: CallEntry[] }) {

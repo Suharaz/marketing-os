@@ -18,9 +18,10 @@ export interface CronHistoryRow {
   accountId: string | null;
   /** null cho job batch (vd: ladipage) hoặc khi account đã bị xoá */
   accountName: string | null;
-  /** Danh sách FB/external API call thực hiện trong run này.
-   *  null cho cron jobs cũ (trước khi callContext được thêm) hoặc job không gọi external API. */
-  details: CallEntry[] | null;
+  /** True nếu có details để expand. Details payload được fetch on-demand
+   *  qua /api/admin/cron-logs/[id]/details để tránh kéo cả MB JSONB
+   *  vào RSC payload mỗi lần load trang. */
+  hasDetails: boolean;
 }
 
 export interface CronHistoryFilter {
@@ -59,6 +60,10 @@ export async function fetchCronHistory(
   const limit = filter.limit ?? 100;
   params.push(limit);
 
+  // Project `details IS NOT NULL` as a flag instead of selecting the full
+  // JSONB. With 200 rows × up to 50KB/row, returning details inflates the
+  // RSC payload to several MB and slows the page to a crawl. Real details
+  // load on-demand via /api/admin/cron-logs/[id]/details when a row expands.
   const res = await db.query<{
     id: string;
     sync_type: SyncTypeT;
@@ -69,14 +74,14 @@ export async function fetchCronHistory(
     error_message: string | null;
     account_id: string | null;
     account_name: string | null;
-    details: CallEntry[] | null;
+    has_details: boolean;
   }>(
     `SELECT
        l.id, l.sync_type, l.status,
        l.started_at, l.finished_at,
        l.records_upserted, l.error_message,
        l.account_id, a.name AS account_name,
-       l.details
+       (l.details IS NOT NULL) AS has_details
      FROM api_sync_log l
      LEFT JOIN social_account a ON a.id = l.account_id
      ${where}
@@ -98,8 +103,20 @@ export async function fetchCronHistory(
     errorMessage: r.error_message,
     accountId: r.account_id,
     accountName: r.account_name,
-    details: r.details,
+    hasDetails: r.has_details,
   }));
+}
+
+/** Fetch the details JSONB for one cron log row. Called on-demand when the
+ *  user expands a row in the UI. Returns null if the row has no details. */
+export async function fetchCronDetails(
+  id: string
+): Promise<CallEntry[] | null> {
+  const res = await db.query<{ details: CallEntry[] | null }>(
+    `SELECT details FROM api_sync_log WHERE id = $1 LIMIT 1`,
+    [id]
+  );
+  return res.rows[0]?.details ?? null;
 }
 
 /** Stats tổng quan: thành công/thất bại 24h + thời điểm chạy gần nhất. */

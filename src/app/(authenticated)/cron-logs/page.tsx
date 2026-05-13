@@ -78,7 +78,7 @@ export default async function CronLogsPage({ searchParams }: PageProps) {
 
   const [stats, rows] = await Promise.all([
     fetchCronStats(),
-    fetchCronHistory({ status, syncType, limit: 200 }),
+    fetchCronHistory({ status, syncType, limit: 100 }),
   ]);
 
   return (
