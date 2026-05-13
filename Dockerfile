@@ -55,17 +55,25 @@ COPY --from=builder --chown=nextjs:nodejs /app/scripts/run-migrations.cjs ./scri
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/seed-admin.cjs ./scripts/seed-admin.cjs
 # hash-password.ts is a dev utility (requires tsx) — not copied to runner image.
 
-# pg required by run-migrations.cjs (plain CJS, outside Next.js bundle).
-# Other cron-only deps (bcryptjs, zod, iron-session, date-fns, node-cron) are
-# either inlined into Turbopack chunks or covered by .next/node_modules
-# above — no separate node_modules copy needed for them. Keeping this list
-# minimal avoids the image bloat that slowed page loads on Coolify.
+# Real npm packages needed by symlinks under .next/node_modules and by
+# the plain-CJS migration runner. Turbopack hashed copies are symlinks
+# pointing to ./node_modules/<real-name>, so without the real packages
+# present, the symlinks dangle and Node ESM import fails.
+#
+#   - pg + transitive: run-migrations.cjs (CJS outside Next bundle) AND
+#     .next/node_modules/pg-<hash> symlink target
+#   - node-cron: target of .next/node_modules/node-cron-<hash> symlink,
+#     resolved by Turbopack runtime when instrumentation imports it
+#
+# Other prod deps (bcryptjs, zod, iron-session, date-fns) are inlined
+# into chunks by the bundler — no separate package needed.
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/pg ./node_modules/pg
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/pg-pool ./node_modules/pg-pool
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/pg-protocol ./node_modules/pg-protocol
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/pg-types ./node_modules/pg-types
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/pgpass ./node_modules/pgpass
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/pg-connection-string ./node_modules/pg-connection-string
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/node-cron ./node_modules/node-cron
 
 USER nextjs
 EXPOSE 3000
