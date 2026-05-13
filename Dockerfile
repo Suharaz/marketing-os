@@ -55,15 +55,17 @@ COPY --from=builder --chown=nextjs:nodejs /app/scripts/run-migrations.cjs ./scri
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/seed-admin.cjs ./scripts/seed-admin.cjs
 # hash-password.ts is a dev utility (requires tsx) — not copied to runner image.
 
-# Overlay the full prod node_modules tree on top of standalone. Next's
-# tracer-built node_modules only includes packages reachable from the HTTP
-# request graph; cron-only deps (node-cron, bcryptjs, zod, iron-session,
-# date-fns) and the migration runner's pg are dropped, even though they are
-# declared production deps. The overlay is a no-op for files standalone
-# already has — identical builds produce identical bytes — but it restores
-# every missing package. Slightly larger image vs. listing each package
-# by name, much less brittle as deps grow.
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+# pg required by run-migrations.cjs (plain CJS, outside Next.js bundle).
+# Other cron-only deps (bcryptjs, zod, iron-session, date-fns, node-cron) are
+# either inlined into Turbopack chunks or covered by .next/node_modules
+# above — no separate node_modules copy needed for them. Keeping this list
+# minimal avoids the image bloat that slowed page loads on Coolify.
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/pg ./node_modules/pg
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/pg-pool ./node_modules/pg-pool
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/pg-protocol ./node_modules/pg-protocol
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/pg-types ./node_modules/pg-types
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/pgpass ./node_modules/pgpass
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/pg-connection-string ./node_modules/pg-connection-string
 
 USER nextjs
 EXPOSE 3000
