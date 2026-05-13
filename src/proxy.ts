@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { unsealData } from 'iron-session';
 import type { SessionData } from '@/lib/auth/session-config';
 
-// Edge runtime — do NOT import bcryptjs, pg, or next/headers cookies() here.
+// Next.js 16 proxy convention (replaces deprecated middleware).
+// Runtime is Node.js — Edge is not supported here. bcryptjs/pg/next-headers
+// could technically be imported now, but we keep this file minimal to stay
+// fast on every matched request.
 
 const COOKIE_NAME = 'mos_session';
 
@@ -13,12 +16,10 @@ export const config = {
   matcher: ['/((?!api/auth|_next|favicon.ico|public|login).*)'],
 };
 
-export default async function middleware(
-  request: NextRequest
-): Promise<NextResponse> {
+export async function proxy(request: NextRequest): Promise<NextResponse> {
   // Root '/' is the public landing page — let it through unauthenticated.
   // The page itself handles "already logged in" by redirecting to /dashboard,
-  // so middleware would only get in the way here.
+  // so the proxy would only get in the way here.
   //
   // Why not exclude '/' in the matcher regex above? Next.js path-to-regexp
   // can't anchor to "exactly /" without matching all subpaths too. Easier
