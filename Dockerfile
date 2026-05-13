@@ -32,11 +32,18 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
+# Next.js 16 standalone tracer does NOT include instrumentation.js or the
+# chunks it depends on (only what the HTTP request graph touches). Copy the
+# whole .next/server tree on top of standalone so Next's own auto-loader can
+# find instrumentation.js at /app/.next/server/instrumentation.js. Merges
+# safely — files identical to standalone copies overwrite themselves; the
+# 3-or-so missing chunks (incl. _127p5s9.* + instrumentation.js) get added.
+COPY --from=builder --chown=nextjs:nodejs /app/.next/server ./.next/server
+
 # Copy migration files and scripts
 COPY --from=builder --chown=nextjs:nodejs /app/migrations ./migrations
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/run-migrations.cjs ./scripts/run-migrations.cjs
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/seed-admin.cjs ./scripts/seed-admin.cjs
-COPY --from=builder --chown=nextjs:nodejs /app/scripts/server-wrapper.cjs ./scripts/server-wrapper.cjs
 # hash-password.ts is a dev utility (requires tsx) — not copied to runner image.
 
 # Copy pg module needed at runtime for run-migrations.cjs
@@ -56,9 +63,8 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "fetch('http://localhost:3000').then(r=>process.exit(r.ok||r.status===307||r.status===302?0:1)).catch(()=>process.exit(1))"
 
-# Run migrations + seed admin user, then start the Next.js server via the
-# wrapper that forces instrumentation.register() to fire in-process.
-# Next 16 standalone + Turbopack does not reliably auto-invoke the hook
-# (verified in prod: container logs missing the "[cron] N jobs scheduled"
-# line entirely), so we wrap server.js to load instrumentation ourselves.
-CMD ["sh", "-c", "node scripts/run-migrations.cjs && node scripts/seed-admin.cjs && node scripts/server-wrapper.cjs"]
+# Run migrations + seed admin user, then start the Next.js server. The
+# standalone tracer's gap is patched above by force-copying .next/server,
+# so Next's own auto-loader will find instrumentation.js and call register()
+# at boot — no wrapper needed.
+CMD ["sh", "-c", "node scripts/run-migrations.cjs && node scripts/seed-admin.cjs && node server.js"]
