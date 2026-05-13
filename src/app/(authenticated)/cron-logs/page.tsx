@@ -246,6 +246,12 @@ function RuntimeStatusPanel() {
   const now = new Date();
   const utcOffsetHours = -now.getTimezoneOffset() / 60;
 
+  // Per-job env config check — surface missing vars so user doesn't
+  // discover them only after a failed cron run.
+  const missingLadipageEnv: string[] = [];
+  if (!process.env.LADIPAGE_WEBHOOK_URL) missingLadipageEnv.push('LADIPAGE_WEBHOOK_URL');
+  if (!process.env.LADIPAGE_API_KEY)     missingLadipageEnv.push('LADIPAGE_API_KEY');
+
   return (
     <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
@@ -262,6 +268,19 @@ function RuntimeStatusPanel() {
             : '✗ Scheduler NOT initialized — kiểm tra instrumentation log'}
         </span>
       </div>
+
+      {missingLadipageEnv.length > 0 && (
+        <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <p className="font-semibold mb-0.5">
+            ⚠ Ladipage sync sẽ luôn fail — thiếu env vars:
+          </p>
+          <p className="font-mono">{missingLadipageEnv.join(', ')}</p>
+          <p className="mt-1 text-amber-700">
+            Add 2 biến này vào Coolify → Environment Variables, redeploy.
+            Tham khảo <code>.env.example</code>.
+          </p>
+        </div>
+      )}
 
       <dl className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-1.5 text-xs mb-4">
         <div className="flex flex-col">

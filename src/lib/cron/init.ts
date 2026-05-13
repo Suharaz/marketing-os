@@ -71,6 +71,18 @@ export function initCrons(): void {
       `(container TZ offset=${-now.getTimezoneOffset() / 60}h, ` +
       `process.env.TZ=${process.env.TZ ?? 'unset'})`
   );
+
+  // Surface missing per-job config so silent runtime failures don't waste
+  // a scheduled run. The cron schedule itself fires, but the job's first
+  // line throws and the user sees only "failed" without knowing why.
+  const missing: string[] = [];
+  if (!process.env.LADIPAGE_WEBHOOK_URL) missing.push('LADIPAGE_WEBHOOK_URL');
+  if (!process.env.LADIPAGE_API_KEY)     missing.push('LADIPAGE_API_KEY');
+  if (missing.length > 0) {
+    console.warn(
+      `[cron] WARNING: ladipage_sync will fail — missing env vars: ${missing.join(', ')}`
+    );
+  }
   console.log('[cron] schedules:');
   console.log('  - page_insights:    0 2,10,18 * * *  (UTC)');
   console.log('  - posts_ingestion:  30 2 * * *        (UTC)');

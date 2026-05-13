@@ -23,8 +23,17 @@ export async function GET(): Promise<NextResponse> {
   }
 
   const now = new Date();
+  const ladipageConfigured =
+    !!process.env.LADIPAGE_WEBHOOK_URL && !!process.env.LADIPAGE_API_KEY;
   return NextResponse.json({
     cronInitialized: globalThis.__cron_initialized === true,
+    ladipageConfigured,
+    missingEnv: ladipageConfigured
+      ? []
+      : [
+          !process.env.LADIPAGE_WEBHOOK_URL && 'LADIPAGE_WEBHOOK_URL',
+          !process.env.LADIPAGE_API_KEY && 'LADIPAGE_API_KEY',
+        ].filter(Boolean),
     serverTime: {
       iso: now.toISOString(),
       vnLocal: now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
