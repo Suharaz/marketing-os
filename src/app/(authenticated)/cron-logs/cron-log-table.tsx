@@ -94,7 +94,7 @@ export function CronLogTable({ rows }: { rows: CronHistoryRow[] }) {
         // Fetch details lần đầu mở row, sau đó cache lại.
         if (!detailsCache.has(id)) {
           setDetailsCache((m) => new Map(m).set(id, { status: 'loading' }));
-          fetch(`/api/admin/cron-logs/${id}/details`)
+          fetch(`/api/sync-logs/${id}/details`)
             .then(async (res) => {
               if (!res.ok) throw new Error(`HTTP ${res.status}`);
               const data = (await res.json()) as { details: CallEntry[] | null };

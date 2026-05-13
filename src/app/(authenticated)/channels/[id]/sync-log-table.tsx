@@ -88,9 +88,10 @@ export function SyncLogTable({ entries }: Props) {
                       {errorShort}
                     </TableCell>
                     <TableCell className="text-right">
-                      {entry.details && entry.details.length > 0 ? (
+                      {entry.callsCount > 0 ? (
                         <SyncDetailsDialog
-                          details={entry.details}
+                          logId={entry.id}
+                          callsCount={entry.callsCount}
                           startedAtLabel={timeAgo}
                         />
                       ) : (

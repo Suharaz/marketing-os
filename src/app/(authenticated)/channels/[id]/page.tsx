@@ -59,6 +59,7 @@ export default async function ChannelDetailPage({ params }: PageProps) {
     <div className="flex flex-col gap-6">
       <ChannelHeader
         accountId={account.id}
+        externalId={account.externalId}
         name={account.name}
         platform={account.platform}
         status={account.status}

@@ -1,10 +1,14 @@
-// GET /api/admin/cron-logs/[id]/details — return the details JSONB for one
-// api_sync_log row. Called on-demand by the cron-log table when a row is
-// expanded, so the main page can avoid embedding several MB of detail data.
+// GET /api/sync-logs/[id]/details — return the details JSONB for one
+// api_sync_log row. Called on-demand by both the admin /cron-logs table
+// AND the per-channel sync log dialog, so the main pages can avoid
+// embedding several MB of detail data in the RSC payload.
+//
+// Auth-only (any logged-in user). Sync call records have access_token
+// redacted at write-time (see lib/sync/call-context.ts), so non-admins
+// viewing their own channel's sync history is safe.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/get-session';
-import { getUserRole } from '@/lib/auth/get-role';
 import { fetchCronDetails } from '@/lib/queries/cron-history';
 
 export const runtime = 'nodejs';
@@ -22,10 +26,6 @@ export async function GET(
 ): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const role = await getUserRole(user.userId);
-  if (role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
 
   const { id } = await params;
   if (!UUID_RE.test(id)) {

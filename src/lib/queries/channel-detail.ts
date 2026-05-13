@@ -9,6 +9,9 @@ export interface ChannelOwner {
 
 export interface ChannelAccount {
   id: string;
+  /** Platform-specific ID — vd FB Page ID (id_page) user nhập khi connect.
+   *  Cần hiển thị để admin verify đúng kênh / debug Ladipage webhook. */
+  externalId: string;
   name: string;
   platform: string;
   status: string;
@@ -51,7 +54,9 @@ export interface SyncLogEntry {
   recordsUpserted: number | null;
   errorMessage: string | null;
   startedAt: string;
-  details: SyncCallEntry[] | null;
+  /** Số call trong details. 0 nếu details=null hoặc rỗng. Tính ngay từ SQL
+   *  qua jsonb_array_length để tránh fetch cả MB JSONB chỉ để đếm. */
+  callsCount: number;
 }
 
 export interface SyncCallEntry {
@@ -68,6 +73,7 @@ export interface SyncCallEntry {
 export async function fetchChannel(id: string): Promise<ChannelAccount | null> {
   const res = await db.query<{
     id: string;
+    external_id: string;
     name: string;
     platform: string;
     status: string;
@@ -80,7 +86,7 @@ export async function fetchChannel(id: string): Promise<ChannelAccount | null> {
     owner_email: string | null;
     owner_role: string | null;
   }>(
-    `SELECT sa.id, sa.name, sa.platform, sa.status, sa.last_synced_at, sa.persona_json,
+    `SELECT sa.id, sa.external_id, sa.name, sa.platform, sa.status, sa.last_synced_at, sa.persona_json,
             sa.owner_member_id,
             am.followers, ch.health_score,
             tm.name AS owner_name, tm.email AS owner_email, tm.role AS owner_role
@@ -103,6 +109,7 @@ export async function fetchChannel(id: string): Promise<ChannelAccount | null> {
 
   return {
     id: row.id,
+    externalId: row.external_id,
     name: row.name,
     platform: row.platform,
     status: row.status,
@@ -203,6 +210,9 @@ export async function fetchSyncLog(
   accountId: string,
   limit = 10
 ): Promise<SyncLogEntry[]> {
+  // Project chỉ jsonb_array_length(details) thay vì cả JSONB. Mỗi row
+  // details có thể nặng 5-50KB → 10 rows = nửa MB embed vào RSC mỗi lần
+  // load channel detail. Component dialog fetch on-demand qua API khi user click.
   const res = await db.query<{
     id: string;
     sync_type: string;
@@ -210,9 +220,10 @@ export async function fetchSyncLog(
     records_upserted: string | null;
     error_message: string | null;
     started_at: string;
-    details: SyncCallEntry[] | null;
+    calls_count: string;
   }>(
-    `SELECT id, sync_type, status, records_upserted, error_message, started_at, details
+    `SELECT id, sync_type, status, records_upserted, error_message, started_at,
+            COALESCE(jsonb_array_length(details), 0) AS calls_count
      FROM api_sync_log
      WHERE account_id = $1
      ORDER BY started_at DESC
@@ -224,7 +235,7 @@ export async function fetchSyncLog(
     id: row.id,
     syncType: row.sync_type,
     status: row.status,
-    details: row.details,
+    callsCount: Number(row.calls_count),
     recordsUpserted:
       row.records_upserted !== null ? Number(row.records_upserted) : null,
     errorMessage: row.error_message,

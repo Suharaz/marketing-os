@@ -30,6 +30,7 @@ interface MemberOption {
 
 interface Props {
   accountId: string;
+  externalId: string;
   name: string;
   platform: string;
   status: string;
@@ -44,6 +45,7 @@ interface Props {
 
 export function ChannelHeader({
   accountId,
+  externalId,
   name,
   platform,
   status,
@@ -123,6 +125,9 @@ export function ChannelHeader({
           <Badge variant="outline">{PLATFORM_LABELS[platform] ?? platform}</Badge>
           <Badge variant={statusCfg.variant}>{statusCfg.label}</Badge>
         </div>
+        <p className="text-xs text-zinc-500 font-mono mt-0.5">
+          ID: {externalId}
+        </p>
         <p className="text-sm text-zinc-500">Lần sync cuối: {syncedAgo}</p>
         <div className="flex items-center gap-2 mt-1">
           <span className="text-sm text-zinc-500">Người phụ trách:</span>
