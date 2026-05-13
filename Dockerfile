@@ -32,13 +32,22 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
-# Next.js 16 standalone tracer does NOT include instrumentation.js or the
-# chunks it depends on (only what the HTTP request graph touches). Copy the
-# whole .next/server tree on top of standalone so Next's own auto-loader can
-# find instrumentation.js at /app/.next/server/instrumentation.js. Merges
-# safely — files identical to standalone copies overwrite themselves; the
-# 3-or-so missing chunks (incl. _127p5s9.* + instrumentation.js) get added.
+# Next.js 16 standalone tracer drops anything only reachable via
+# instrumentation (server.js never imports it). Patch three gaps:
+#
+#   1. .next/server  → restores instrumentation.js + the chunks it requires
+#      (verified missing: _127p5s9.*, [externals]__12lt8e3.*,
+#      [root-of-the-server]__0mjggad.*).
+#   2. .next/node_modules  → Turbopack content-hashed package copies
+#      (e.g. node-cron-850d997d12dc4759) that the runtime resolves via
+#      ESM specifier lookup. Standalone keeps the pg-* copy but drops
+#      node-cron-* because no HTTP route imports node-cron directly.
+#   3. node_modules overlay (further down) → real packages for runtime.
+#
+# COPY merges directories; standalone-traced files are byte-identical, so
+# the overlay is a no-op for them and only ADDS the dropped files.
 COPY --from=builder --chown=nextjs:nodejs /app/.next/server ./.next/server
+COPY --from=builder --chown=nextjs:nodejs /app/.next/node_modules ./.next/node_modules
 
 # Copy migration files and scripts
 COPY --from=builder --chown=nextjs:nodejs /app/migrations ./migrations
