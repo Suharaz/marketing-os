@@ -64,5 +64,30 @@ export function initCrons(): void {
   );
 
   globalThis.__cron_initialized = true;
-  console.log('[cron] 4 jobs scheduled');
+
+  const now = new Date();
+  console.log(
+    `[cron] 4 jobs scheduled at ${now.toISOString()} ` +
+      `(container TZ offset=${-now.getTimezoneOffset() / 60}h, ` +
+      `process.env.TZ=${process.env.TZ ?? 'unset'})`
+  );
+  console.log('[cron] schedules:');
+  console.log('  - page_insights:    0 2,10,18 * * *  (UTC)');
+  console.log('  - posts_ingestion:  30 2 * * *        (UTC)');
+  console.log('  - health_recompute: 0 3 * * *         (UTC)');
+  console.log('  - ladipage_sync:    30 23 * * *       (Asia/Ho_Chi_Minh)');
+
+  // Boot-time heartbeat: log every 60s for the first 5 minutes so an
+  // operator looking at `docker logs` after deploy can confirm the Node
+  // event loop is alive (and by extension, node-cron's internal interval
+  // is still scheduled to fire). Without this, "no log = silently dead"
+  // vs "no log = no scheduled time has passed yet" are indistinguishable.
+  let beats = 0;
+  const heartbeat = setInterval(() => {
+    beats++;
+    console.log(
+      `[cron] heartbeat ${beats}/5 at ${new Date().toISOString()} — scheduler alive`
+    );
+    if (beats >= 5) clearInterval(heartbeat);
+  }, 60 * 1000);
 }

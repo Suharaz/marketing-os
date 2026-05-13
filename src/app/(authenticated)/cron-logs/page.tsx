@@ -8,6 +8,12 @@ import {
 } from '@/lib/queries/cron-history';
 import type { SyncTypeT, SyncStatusT } from '@/lib/db-types';
 import { CronLogTable } from './cron-log-table';
+import { ManualRunButtons } from './manual-run-buttons';
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __cron_initialized: boolean | undefined;
+}
 
 export const metadata: Metadata = {
   title: 'Lịch sử cron — Marketing OS',
@@ -113,6 +119,9 @@ export default async function CronLogsPage({ searchParams }: PageProps) {
           isText
         />
       </div>
+
+      {/* Runtime status + manual triggers */}
+      <RuntimeStatusPanel />
 
       {/* Schedule reference */}
       <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
@@ -227,6 +236,78 @@ function FilterBar({
         </FilterPill>
       ))}
     </div>
+  );
+}
+
+function RuntimeStatusPanel() {
+  // Đọc trực tiếp từ globalThis — initCrons set flag này khi register thành công.
+  // Nếu false trong production = instrumentation hook không chạy → cron chết.
+  const initialized = globalThis.__cron_initialized === true;
+  const now = new Date();
+  const utcOffsetHours = -now.getTimezoneOffset() / 60;
+
+  return (
+    <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+        <h3 className="text-sm font-semibold text-zinc-900">Trạng thái runtime</h3>
+        <span
+          className={
+            initialized
+              ? 'inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200'
+              : 'inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 border border-red-200'
+          }
+        >
+          {initialized
+            ? '● Scheduler initialized'
+            : '✗ Scheduler NOT initialized — kiểm tra instrumentation log'}
+        </span>
+      </div>
+
+      <dl className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-1.5 text-xs mb-4">
+        <div className="flex flex-col">
+          <dt className="text-zinc-500">Server time (UTC)</dt>
+          <dd className="font-mono text-zinc-900">{now.toISOString()}</dd>
+        </div>
+        <div className="flex flex-col">
+          <dt className="text-zinc-500">Server time (Asia/Ho_Chi_Minh)</dt>
+          <dd className="font-mono text-zinc-900">
+            {now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
+          </dd>
+        </div>
+        <div className="flex flex-col">
+          <dt className="text-zinc-500">Container TZ offset</dt>
+          <dd className="font-mono text-zinc-900">
+            {utcOffsetHours >= 0 ? '+' : ''}
+            {utcOffsetHours}h (env.TZ={process.env.TZ ?? 'unset'})
+          </dd>
+        </div>
+        <div className="flex flex-col">
+          <dt className="text-zinc-500">Node</dt>
+          <dd className="font-mono text-zinc-900">{process.version}</dd>
+        </div>
+        <div className="flex flex-col">
+          <dt className="text-zinc-500">PID</dt>
+          <dd className="font-mono text-zinc-900">
+            {process.pid} (uptime {Math.floor(process.uptime())}s)
+          </dd>
+        </div>
+        <div className="flex flex-col">
+          <dt className="text-zinc-500">NEXT_RUNTIME</dt>
+          <dd className="font-mono text-zinc-900">
+            {process.env.NEXT_RUNTIME ?? 'unset'}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="border-t border-zinc-100 pt-3">
+        <p className="text-xs text-zinc-500 mb-2">
+          Chạy thủ công để verify scheduler không ảnh hưởng đến code job.
+          Nếu nút này thành công nhưng cron auto không fire → vấn đề là
+          instrumentation/scheduler.
+        </p>
+        <ManualRunButtons />
+      </div>
+    </section>
   );
 }
 

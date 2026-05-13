@@ -1,11 +1,25 @@
-// Next.js 16 instrumentation hook — stable, no experimental flag needed.
-// Runs once when the server process starts (not on every request).
-// Guards against Edge runtime: cron jobs require Node.js APIs.
+// Next.js instrumentation hook — runs once when the server process starts
+// (not on every request). Bootstraps node-cron scheduler.
+//
+// Runtime guard: only skip if EXPLICITLY edge — undefined/empty NEXT_RUNTIME
+// has been observed in some Coolify/standalone deployments and would
+// otherwise silently disable cron entirely.
 
 export async function register(): Promise<void> {
-  // Skip in Edge runtime — node-cron and pg require Node.js APIs
-  if (process.env.NEXT_RUNTIME !== 'nodejs') return;
+  console.log(
+    `[instrumentation] register() called (NEXT_RUNTIME=${process.env.NEXT_RUNTIME ?? 'unset'})`
+  );
 
-  const { initCrons } = await import('./src/lib/cron/init');
-  initCrons();
+  if (process.env.NEXT_RUNTIME === 'edge') {
+    console.log('[instrumentation] edge runtime — skip cron init');
+    return;
+  }
+
+  try {
+    const { initCrons } = await import('./src/lib/cron/init');
+    initCrons();
+  } catch (err) {
+    // Surface the failure loudly — silent failure is what got us here.
+    console.error('[instrumentation] Cron init failed:', err);
+  }
 }
