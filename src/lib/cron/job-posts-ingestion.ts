@@ -15,6 +15,7 @@ import {
 } from '@/lib/cron/upsert-helpers';
 import { handleAccountError } from '@/lib/cron/account-error-handler';
 import { invalidateDashboard } from '@/lib/cache/dashboard-cache';
+import { callContext, type CallEntry } from '@/lib/sync/call-context';
 import type { SocialPostRow, PostMetricDailyRow } from '@/lib/cron/upsert-helpers';
 
 interface ActiveAccount {
@@ -73,72 +74,75 @@ export async function runPostsIngestionJob(): Promise<void> {
 
   for (const acc of accounts) {
     const logId = await startSyncLog('posts', acc.id);
+    // Capture every fb() call this account makes — persisted as details JSONB.
+    const calls: CallEntry[] = [];
     try {
-      const token = await decryptToken(acc.access_token_encrypted);
-      const since = unixDaysAgo(LOOKBACK_DAYS);
-      // until = todayT08:00:00+0000 — đồng nhất mọi FB request, tránh để FB
-      // default until="now" cắt cụt response trước mốc PT-midnight gần nhất.
-      const until = getTodayUntilUtcSec();
+      const result = await callContext.run(calls, async () => {
+        const token = await decryptToken(acc.access_token_encrypted);
+        const since = unixDaysAgo(LOOKBACK_DAYS);
+        // until = todayT08:00:00+0000 — đồng nhất mọi FB request, tránh để FB
+        // default until="now" cắt cụt response trước mốc PT-midnight gần nhất.
+        const until = getTodayUntilUtcSec();
 
-      const rawPosts = await fetchPagePosts(token, acc.external_id, since, until);
-      const parsed = rawPosts.map((p) => parsePost(p));
+        const rawPosts = await fetchPagePosts(token, acc.external_id, since, until);
+        const parsed = rawPosts.map((p) => parsePost(p));
 
-      if (parsed.length === 0) {
+        if (parsed.length === 0) {
+          return { metricCount: 0, postCount: 0 };
+        }
+
+        const postRows: SocialPostRow[] = parsed.map((p) => ({
+          account_id: acc.id,
+          external_id: p.external_id,
+          content: p.content,
+          media_url: p.media_url,
+          post_type: p.post_type,
+          published_at: p.published_at,
+          permalink: p.permalink,
+        }));
+
+        const idMap = await upsertSocialPost(postRows);
+
+        const metricRows: PostMetricDailyRow[] = [];
+        for (const p of parsed) {
+          const postId = idMap.get(p.external_id);
+          if (!postId) continue;
+          metricRows.push({
+            post_id: postId,
+            date: today,
+            reactions: p.metrics.reactions,
+            comments: p.metrics.comments,
+            shares: p.metrics.shares,
+            reach: p.metrics.reach,
+            impressions: p.metrics.impressions,
+            clicks: p.metrics.clicks,
+            video_views: p.metrics.video_views,
+          });
+        }
+
+        const metricCount = await upsertPostMetricDaily(metricRows);
+        return { metricCount, postCount: parsed.length };
+      });
+
+      totalRecords += result.metricCount;
+
+      if (result.postCount === 0) {
         console.log(`[job-posts-ingestion] Account ${acc.id}: no posts in window`);
-        // Vẫn finalize log thành success(0) — phản ánh trung thực "đã chạy, không có data"
-        await finishSyncLog(logId, 'success', 0);
-        continue;
+      } else {
+        // Update last_synced_at on success
+        await db.query(
+          `UPDATE social_account SET last_synced_at = NOW() WHERE id = $1`,
+          [acc.id]
+        );
+        console.log(
+          `[job-posts-ingestion] Account ${acc.id}: ${result.postCount} posts, ${result.metricCount} metric rows`
+        );
       }
 
-      // Build SocialPostRow array
-      const postRows: SocialPostRow[] = parsed.map((p) => ({
-        account_id: acc.id,
-        external_id: p.external_id,
-        content: p.content,
-        media_url: p.media_url,
-        post_type: p.post_type,
-        published_at: p.published_at,
-        permalink: p.permalink,
-      }));
-
-      // UPSERT posts — get back external_id → internal UUID map
-      const idMap = await upsertSocialPost(postRows);
-
-      // Build PostMetricDailyRow array (today's cumulative snapshot)
-      const metricRows: PostMetricDailyRow[] = [];
-      for (const p of parsed) {
-        const postId = idMap.get(p.external_id);
-        if (!postId) continue;
-
-        metricRows.push({
-          post_id: postId,
-          date: today,
-          reactions: p.metrics.reactions,
-          comments: p.metrics.comments,
-          shares: p.metrics.shares,
-          reach: p.metrics.reach,
-          impressions: p.metrics.impressions,
-          clicks: p.metrics.clicks,
-          video_views: p.metrics.video_views,
-        });
-      }
-
-      const metricCount = await upsertPostMetricDaily(metricRows);
-      totalRecords += metricCount;
-
-      // Update last_synced_at on success
-      await db.query(
-        `UPDATE social_account SET last_synced_at = NOW() WHERE id = $1`,
-        [acc.id]
-      );
-
-      await finishSyncLog(logId, 'success', metricCount);
-      console.log(
-        `[job-posts-ingestion] Account ${acc.id}: ${parsed.length} posts, ${metricCount} metric rows`
-      );
+      await finishSyncLog(logId, 'success', result.metricCount, null, calls);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      await finishSyncLog(logId, 'failed', 0, errMsg);
+      await finishSyncLog(logId, 'failed', 0, errMsg, calls);
       await handleAccountError(acc.id, err);
     }
   }

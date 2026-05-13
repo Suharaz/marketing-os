@@ -3,6 +3,7 @@
 
 import { db } from '@/lib/db';
 import type { SyncTypeT, SyncStatusT } from '@/lib/db-types';
+import type { CallEntry } from '@/lib/sync/call-context';
 
 export interface CronHistoryRow {
   id: string;
@@ -17,6 +18,9 @@ export interface CronHistoryRow {
   accountId: string | null;
   /** null cho job batch (vd: ladipage) hoặc khi account đã bị xoá */
   accountName: string | null;
+  /** Danh sách FB/external API call thực hiện trong run này.
+   *  null cho cron jobs cũ (trước khi callContext được thêm) hoặc job không gọi external API. */
+  details: CallEntry[] | null;
 }
 
 export interface CronHistoryFilter {
@@ -65,12 +69,14 @@ export async function fetchCronHistory(
     error_message: string | null;
     account_id: string | null;
     account_name: string | null;
+    details: CallEntry[] | null;
   }>(
     `SELECT
        l.id, l.sync_type, l.status,
        l.started_at, l.finished_at,
        l.records_upserted, l.error_message,
-       l.account_id, a.name AS account_name
+       l.account_id, a.name AS account_name,
+       l.details
      FROM api_sync_log l
      LEFT JOIN social_account a ON a.id = l.account_id
      ${where}
@@ -92,6 +98,7 @@ export async function fetchCronHistory(
     errorMessage: r.error_message,
     accountId: r.account_id,
     accountName: r.account_name,
+    details: r.details,
   }));
 }
 

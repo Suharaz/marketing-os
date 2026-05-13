@@ -5,18 +5,9 @@ import { getUserRole } from '@/lib/auth/get-role';
 import {
   fetchCronHistory,
   fetchCronStats,
-  type CronHistoryRow,
 } from '@/lib/queries/cron-history';
 import type { SyncTypeT, SyncStatusT } from '@/lib/db-types';
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableHead,
-  TableRow,
-  TableCell,
-} from '@/components/ui/table';
-import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { CronLogTable } from './cron-log-table';
 
 export const metadata: Metadata = {
   title: 'Lịch sử cron — Marketing OS',
@@ -59,37 +50,6 @@ function formatTime(iso: string | null): string {
   });
 }
 
-function formatDuration(ms: number | null): string {
-  if (ms === null) return '—';
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  const m = Math.floor(ms / 60_000);
-  const s = Math.floor((ms % 60_000) / 1000);
-  return `${m}m ${s}s`;
-}
-
-function StatusBadge({ status }: { status: SyncStatusT }) {
-  if (status === 'success') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200">
-        <CheckCircle2 className="size-3" /> Thành công
-      </span>
-    );
-  }
-  if (status === 'failed') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 border border-red-200">
-        <XCircle className="size-3" /> Lỗi
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 border border-blue-200">
-      <Loader2 className="size-3 animate-spin" /> Đang chạy
-    </span>
-  );
-}
-
 interface PageProps {
   searchParams: Promise<{ status?: string; type?: string }>;
 }
@@ -121,7 +81,7 @@ export default async function CronLogsPage({ searchParams }: PageProps) {
         <h2 className="text-xl font-bold text-zinc-900">Lịch sử cron</h2>
         <p className="text-sm text-zinc-500 mt-0.5">
           Mỗi job ghi 1 row per account/run vào bảng <code>api_sync_log</code>.
-          Hiển thị 200 lần chạy gần nhất.
+          Bấm vào dòng để xem chi tiết các API call đã thực hiện.
         </p>
       </div>
 
@@ -180,31 +140,7 @@ export default async function CronLogsPage({ searchParams }: PageProps) {
 
       {/* Table */}
       <section className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-        {rows.length === 0 ? (
-          <div className="p-8 text-center text-sm text-zinc-500">
-            Chưa có lần chạy nào{' '}
-            {(status || syncType) && '— thử bỏ filter'}.
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-zinc-50">
-                <TableHead>Thời điểm</TableHead>
-                <TableHead>Job</TableHead>
-                <TableHead>Account</TableHead>
-                <TableHead>Trạng thái</TableHead>
-                <TableHead className="text-right">Bản ghi</TableHead>
-                <TableHead className="text-right">Thời gian</TableHead>
-                <TableHead>Lỗi</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((r) => (
-                <CronRow key={r.id} row={r} />
-              ))}
-            </TableBody>
-          </Table>
-        )}
+        <CronLogTable rows={rows} />
       </section>
     </div>
   );
@@ -242,37 +178,6 @@ function StatCard({
   );
 }
 
-function CronRow({ row }: { row: CronHistoryRow }) {
-  return (
-    <TableRow>
-      <TableCell className="font-mono text-xs text-zinc-600">
-        {formatTime(row.startedAt)}
-      </TableCell>
-      <TableCell className="text-sm text-zinc-900">
-        {JOB_LABEL[row.syncType] ?? row.syncType}
-      </TableCell>
-      <TableCell className="text-sm text-zinc-700">
-        {row.accountName ?? (row.accountId ? '— (deleted)' : '— (batch)')}
-      </TableCell>
-      <TableCell>
-        <StatusBadge status={row.status} />
-      </TableCell>
-      <TableCell className="text-right font-mono text-xs text-zinc-700">
-        {row.recordsUpserted}
-      </TableCell>
-      <TableCell className="text-right font-mono text-xs text-zinc-600">
-        {formatDuration(row.durationMs)}
-      </TableCell>
-      <TableCell
-        className="text-xs text-red-600 max-w-[300px] truncate"
-        title={row.errorMessage ?? undefined}
-      >
-        {row.errorMessage ?? ''}
-      </TableCell>
-    </TableRow>
-  );
-}
-
 function FilterBar({
   status,
   type,
@@ -280,7 +185,6 @@ function FilterBar({
   status?: SyncStatusT;
   type?: SyncTypeT;
 }) {
-  // Server-rendered filter — build query strings, no client state.
   const buildHref = (next: { status?: string; type?: string }) => {
     const params = new URLSearchParams();
     const s = next.status ?? status;

@@ -12,6 +12,7 @@ import { startSyncLog, finishSyncLog } from '@/lib/cron/sync-log';
 import { upsertAccountMetricDaily } from '@/lib/cron/upsert-helpers';
 import { handleAccountError } from '@/lib/cron/account-error-handler';
 import { invalidateDashboard } from '@/lib/cache/dashboard-cache';
+import { callContext, type CallEntry } from '@/lib/sync/call-context';
 import type { AccountMetricDailyRow } from '@/lib/cron/upsert-helpers';
 
 interface ActiveAccount {
@@ -84,24 +85,27 @@ export async function runPageInsightsJob(): Promise<void> {
   for (const acc of accounts) {
     // Mỗi account = 1 log row riêng → channel detail page query được
     const logId = await startSyncLog('page_insights', acc.id);
+    // callContext.run wraps the fetch + parse so every fb() call gets pushed
+    // to `calls` — we persist it as api_sync_log.details for UI inspection.
+    const calls: CallEntry[] = [];
     try {
-      const token = await decryptToken(acc.access_token_encrypted);
-      const since = unixDaysAgo(2);
-      // until = todayT08:00:00+0000 — đảm bảo FB include row finalised gần
-      // nhất, không cắt mất ngày cuối nếu cron chạy trước PT-midnight rollover.
-      const until = getTodayUntilUtcSec();
+      const upserted = await callContext.run(calls, async () => {
+        const token = await decryptToken(acc.access_token_encrypted);
+        const since = unixDaysAgo(2);
+        // until = todayT08:00:00+0000 — đảm bảo FB include row finalised gần
+        // nhất, không cắt mất ngày cuối nếu cron chạy trước PT-midnight rollover.
+        const until = getTodayUntilUtcSec();
 
-      // Single /insights call covers all 8 metrics (incl. page_follows for followers count)
-      const rawInsights = await fetchPageInsights(
-        token,
-        acc.external_id,
-        since,
-        until
-      );
-      const parsed = parseInsights(rawInsights);
-      const rows = toMetricRows(acc.id, parsed);
-
-      const upserted = await upsertAccountMetricDaily(rows);
+        const rawInsights = await fetchPageInsights(
+          token,
+          acc.external_id,
+          since,
+          until
+        );
+        const parsed = parseInsights(rawInsights);
+        const rows = toMetricRows(acc.id, parsed);
+        return upsertAccountMetricDaily(rows);
+      });
       totalRecords += upserted;
 
       // Update last_synced_at on success
@@ -110,11 +114,11 @@ export async function runPageInsightsJob(): Promise<void> {
         [acc.id]
       );
 
-      await finishSyncLog(logId, 'success', upserted);
+      await finishSyncLog(logId, 'success', upserted, null, calls);
       console.log(`[job-page-insights] Account ${acc.id}: upserted ${upserted} rows`);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      await finishSyncLog(logId, 'failed', 0, errMsg);
+      await finishSyncLog(logId, 'failed', 0, errMsg, calls);
       await handleAccountError(acc.id, err);
     }
   }

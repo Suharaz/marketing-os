@@ -28,14 +28,19 @@ export async function startSyncLog(
 
 /**
  * Update an existing api_sync_log row to finalize it.
- * Sets finished_at=NOW(), status, records_upserted, and optional error_message.
+ * Sets finished_at=NOW(), status, records_upserted, optional error_message,
+ * and optional details (array of CallEntry from call-context).
  * Swallows errors — log failures must never mask real errors.
+ *
+ * Pass `details` only when the caller wrapped the run in `callContext.run`
+ * — otherwise omit so the column stays NULL and avoids unnecessary bloat.
  */
 export async function finishSyncLog(
   logId: string,
   status: SyncStatusT,
   recordsUpserted: number,
-  errorMsg?: string | null
+  errorMsg?: string | null,
+  details?: unknown
 ): Promise<void> {
   try {
     await db.query(
@@ -43,9 +48,16 @@ export async function finishSyncLog(
        SET finished_at = NOW(),
            status = $2,
            records_upserted = $3,
-           error_message = $4
+           error_message = $4,
+           details = $5::jsonb
        WHERE id = $1`,
-      [logId, status, recordsUpserted, errorMsg ?? null]
+      [
+        logId,
+        status,
+        recordsUpserted,
+        errorMsg ?? null,
+        details === undefined ? null : JSON.stringify(details),
+      ]
     );
   } catch (err) {
     console.error('[cron/sync-log] Failed to finalize sync log row:', err);
