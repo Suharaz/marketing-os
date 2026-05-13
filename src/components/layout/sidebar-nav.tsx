@@ -10,6 +10,7 @@ import {
   Wallet,
   Users,
   Inbox,
+  Activity,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/auth/session-config';
 import { UserMenu } from './user-menu';
@@ -24,6 +25,7 @@ const BASE_ITEMS = [
 
 const ADMIN_ITEMS = [
   { href: '/team', label: 'Quản lý team', icon: Users },
+  { href: '/cron-logs', label: 'Lịch sử cron', icon: Activity },
 ];
 
 interface SidebarProps {
