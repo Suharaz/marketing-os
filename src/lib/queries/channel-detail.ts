@@ -133,19 +133,37 @@ export async function fetchChannel(id: string): Promise<ChannelAccount | null> {
 export async function fetchMetrics7d(accountId: string): Promise<ChannelMetricDay[]> {
   // Lấy 7 ngày gần nhất NHƯNG loại trừ hôm nay (data hôm nay chưa đủ → tránh tụt cuối chart)
   // Khoảng: [CURRENT_DATE - 7, CURRENT_DATE - 1] → 7 điểm dữ liệu
+  //
+  // posts_count: COUNT từ social_post group by PT date (KHÔNG đọc column
+  // account_metric_daily.posts_count). Cùng pattern với dashboard-trend.ts +
+  // dashboard-top-performers.ts. Lý do: single source of truth — page_insights
+  // API không trả per-day post count, nên column denormalized dễ bị race wipe.
+  // PT date dùng để align với account_metric_daily.date (FB Insights báo theo PT).
   const res = await db.query<{
     date: string;
     followers: string | null;
     total_reach: string | null;
     total_engagement: string | null;
-    posts_count: string | null;
+    posts_count: string;
   }>(
-    `SELECT to_char(date, 'YYYY-MM-DD') AS date, followers, total_reach, total_engagement, posts_count
-     FROM account_metric_daily
-     WHERE account_id = $1
-       AND date >= CURRENT_DATE - INTERVAL '7 days'
-       AND date < CURRENT_DATE
-     ORDER BY date ASC`,
+    `SELECT to_char(amd.date, 'YYYY-MM-DD') AS date,
+            amd.followers, amd.total_reach, amd.total_engagement,
+            COALESCE(pc.posts_count, 0) AS posts_count
+     FROM account_metric_daily amd
+     LEFT JOIN (
+       SELECT (published_at AT TIME ZONE 'America/Los_Angeles')::date AS date,
+              COUNT(*)::bigint AS posts_count
+       FROM social_post
+       WHERE account_id = $1
+         AND published_at IS NOT NULL
+         AND published_at >= (CURRENT_DATE - INTERVAL '7 days')::timestamptz
+         AND published_at <  CURRENT_DATE::timestamptz
+       GROUP BY 1
+     ) pc ON pc.date = amd.date
+     WHERE amd.account_id = $1
+       AND amd.date >= CURRENT_DATE - INTERVAL '7 days'
+       AND amd.date < CURRENT_DATE
+     ORDER BY amd.date ASC`,
     [accountId]
   );
 
@@ -155,7 +173,7 @@ export async function fetchMetrics7d(accountId: string): Promise<ChannelMetricDa
     totalReach: row.total_reach !== null ? Number(row.total_reach) : null,
     totalEngagement:
       row.total_engagement !== null ? Number(row.total_engagement) : null,
-    postsCount: row.posts_count !== null ? Number(row.posts_count) : null,
+    postsCount: Number(row.posts_count),
   }));
 }
 

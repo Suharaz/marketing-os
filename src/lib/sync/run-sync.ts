@@ -87,24 +87,16 @@ async function runManualSyncInner(accountId: string, calls: CallEntry[]): Promis
       untilTs
     );
 
-    // Compute posts_count per date from rawPosts (FB doesn't expose this metric).
-    // Bucket by PT calendar date so the key aligns with parseInsights output —
-    // both account_metric_daily.date columns must use the same timezone.
-    const postsCountByDate = new Map<string, number>();
-    for (const p of rawPosts) {
-      if (!p.created_time) continue;
-      const dateKey = toPtDateKey(p.created_time);
-      postsCountByDate.set(dateKey, (postsCountByDate.get(dateKey) ?? 0) + 1);
-    }
-
-    // Page-level: parse + posts_count + UPSERT account_metric_daily
+    // Page-level: parse + UPSERT account_metric_daily.
+    // posts_count: KHÔNG ghi nữa — query đọc bằng COUNT từ social_post (xem
+    // channel-detail.ts, dashboard-trend.ts). social_post được upsert bên dưới.
     const parsedDays = parseInsights(rawInsights);
     // "today" must also be PT — FB reports daily insights in PT so the
     // fallback row check below has to compare PT-to-PT.
     const today = toPtDateKey(new Date());
 
     // Always include today's row even if FB returned no insights for today
-    // (cần để track posts_count hôm nay nếu user vừa đăng bài).
+    // (cần track followers hôm nay khi FB delay 1-2 ngày).
     const dateKeys = new Set(parsedDays.map((d) => d.date.toISOString().slice(0, 10)));
     if (!dateKeys.has(today)) {
       // Carry-forward followers từ row gần nhất — tránh hiện 0 trên UI khi FB
@@ -131,22 +123,18 @@ async function runManualSyncInner(accountId: string, calls: CallEntry[]): Promis
       });
     }
 
-    const accountRows = parsedDays.map((day) => {
-      const dateKey = day.date.toISOString().slice(0, 10);
-      return {
-        account_id: accountId,
-        date: day.date,
-        followers: day.followers,
-        follower_growth: day.follower_growth,
-        posts_count: postsCountByDate.get(dateKey) ?? 0,
-        total_reach: day.total_reach,
-        total_reach_unique: day.total_reach_unique,
-        total_engagement: day.total_engagement,
-        total_actions: day.total_actions,
-        page_views: day.page_views,
-        post_reactions_total: day.post_reactions_total,
-      };
-    });
+    const accountRows = parsedDays.map((day) => ({
+      account_id: accountId,
+      date: day.date,
+      followers: day.followers,
+      follower_growth: day.follower_growth,
+      total_reach: day.total_reach,
+      total_reach_unique: day.total_reach_unique,
+      total_engagement: day.total_engagement,
+      total_actions: day.total_actions,
+      page_views: day.page_views,
+      post_reactions_total: day.post_reactions_total,
+    }));
     const accountMetricCount = await upsertAccountMetricDaily(accountRows);
 
     // Post-level: posts already include insights + comments + shares

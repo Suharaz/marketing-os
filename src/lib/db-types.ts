@@ -92,6 +92,9 @@ export interface AccountMetricDaily {
   date: Date;
   followers: number;
   follower_growth: number;
+  /** @deprecated NOT NULL DEFAULT 0. KHÔNG ghi từ code — query đọc bằng COUNT
+   *  từ social_post (single source of truth). Column còn để legacy data, sẽ
+   *  drop trong migration sau. */
   posts_count: number;
   total_reach: number;
   total_reach_unique: number;

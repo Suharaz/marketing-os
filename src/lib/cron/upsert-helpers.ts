@@ -6,12 +6,14 @@ import { db } from '@/lib/db';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+// posts_count CỐ Ý không có ở đây — query đọc bằng COUNT từ social_post
+// (xem channel-detail.ts, dashboard-trend.ts). Column posts_count trong DB
+// vẫn tồn tại (NOT NULL DEFAULT 0) nhưng deprecated — INSERT bỏ qua → auto 0.
 export interface AccountMetricDailyRow {
   account_id: string;
   date: Date | string;
   followers: number;
   follower_growth: number;
-  posts_count: number;
   total_reach: number;
   total_reach_unique: number;
   total_engagement: number;
@@ -58,24 +60,18 @@ export async function upsertAccountMetricDaily(
   for (const row of rows) {
     await db.query(
       `INSERT INTO account_metric_daily
-         (account_id, date, followers, follower_growth, posts_count,
+         (account_id, date, followers, follower_growth,
           total_reach, total_reach_unique, total_engagement,
           total_actions, page_views, post_reactions_total, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
        ON CONFLICT (account_id, date) DO UPDATE SET
          -- COALESCE(NULLIF(EXCLUDED.x, 0), old.x): nếu caller gửi 0 (placeholder
          -- "today" row khi FB chưa finalize, hoặc API hiccup), giữ giá trị cũ
          -- thay vì clobber. Áp dụng cho mọi metric mà 0 = "chưa có data" thay vì
          -- "thật sự bằng 0". Ngăn row bị stuck ở 0 vĩnh viễn khi FB delay 1-2 ngày.
          followers            = COALESCE(NULLIF(EXCLUDED.followers, 0), account_metric_daily.followers),
-         -- follower_growth GIỮ EXCLUDED — 0 là giá trị hợp lệ (ngày không có
-         -- follower mới). Còn posts_count thì page_insights cron hardcode = 0
-         -- vì FB không trả số bài qua endpoint đó (chỉ run-sync / posts-ingestion
-         -- mới tính từ social_post). Nếu để EXCLUDED clobber, cron page_insights
-         -- (chạy 3×/ngày) sẽ wipe posts_count thật về 0 — giữ giá trị cũ khi
-         -- EXCLUDED = 0 để tránh race condition đó.
+         -- follower_growth GIỮ EXCLUDED — 0 là giá trị hợp lệ (ngày không có follower mới).
          follower_growth      = EXCLUDED.follower_growth,
-         posts_count          = COALESCE(NULLIF(EXCLUDED.posts_count, 0), account_metric_daily.posts_count),
          total_reach          = COALESCE(NULLIF(EXCLUDED.total_reach, 0), account_metric_daily.total_reach),
          total_reach_unique   = COALESCE(NULLIF(EXCLUDED.total_reach_unique, 0), account_metric_daily.total_reach_unique),
          total_engagement     = COALESCE(NULLIF(EXCLUDED.total_engagement, 0), account_metric_daily.total_engagement),
@@ -88,7 +84,6 @@ export async function upsertAccountMetricDaily(
         row.date,
         row.followers,
         row.follower_growth,
-        row.posts_count,
         row.total_reach,
         row.total_reach_unique,
         row.total_engagement,

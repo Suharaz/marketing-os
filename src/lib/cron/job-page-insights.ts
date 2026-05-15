@@ -40,12 +40,13 @@ function toMetricRows(
   accountId: string,
   parsed: ReturnType<typeof parseInsights>
 ): AccountMetricDailyRow[] {
+  // posts_count: KHÔNG ghi — query đọc bằng COUNT từ social_post (xem
+  // channel-detail.ts, dashboard-trend.ts). Column DB tự fill DEFAULT 0.
   return parsed.map((day) => ({
     account_id: accountId,
     date: day.date,
     followers: day.followers,
     follower_growth: day.follower_growth,
-    posts_count: 0, // page_insights API không trả posts_count → upsert giữ giá trị cũ (xem upsert-helpers.ts)
     total_reach: day.total_reach,
     total_reach_unique: day.total_reach_unique,
     total_engagement: day.total_engagement,
