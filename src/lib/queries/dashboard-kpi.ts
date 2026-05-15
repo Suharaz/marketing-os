@@ -12,6 +12,11 @@ import { db } from '@/lib/db';
 //   the moment it's logged, no sync lag):
 //     current  = [CURRENT_DATE - days,    CURRENT_DATE]        ← inclusive of today
 //     previous = [CURRENT_DATE - 2*days,  CURRENT_DATE - days) ← prior equal window
+//
+// Channel scope: every query INNER JOINs social_account and filters out
+// `status = 'disconnected'`. Keeps 'active' + 'token_expired' (token_expired
+// is temporary — user may reconnect, so we still want their historical data).
+// Without this filter, kênh đã hủy kết nối vẫn được tính vào tổng KPI.
 export interface KpiData {
   reach: number;
   reachPrev: number;
@@ -30,26 +35,31 @@ export async function fetchKpiData(days: number): Promise<KpiData> {
     db.query<{ reach: string; reach_prev: string }>(
       `
       SELECT
-        COALESCE(SUM(total_reach) FILTER (
-          WHERE date >= CURRENT_DATE - $1::int AND date < CURRENT_DATE
+        COALESCE(SUM(amd.total_reach) FILTER (
+          WHERE amd.date >= CURRENT_DATE - $1::int AND amd.date < CURRENT_DATE
         ), 0) AS reach,
-        COALESCE(SUM(total_reach) FILTER (
-          WHERE date >= CURRENT_DATE - ($1::int * 2) AND date < CURRENT_DATE - $1::int
+        COALESCE(SUM(amd.total_reach) FILTER (
+          WHERE amd.date >= CURRENT_DATE - ($1::int * 2) AND amd.date < CURRENT_DATE - $1::int
         ), 0) AS reach_prev
-      FROM account_metric_daily
+      FROM account_metric_daily amd
+      INNER JOIN social_account sa ON sa.id = amd.account_id
+      WHERE sa.status != 'disconnected'
     `,
       [days]
     ),
     db.query<{ avg_er: string; avg_er_prev: string }>(
       `
       SELECT
-        COALESCE(AVG(engagement_rate) FILTER (
-          WHERE date >= CURRENT_DATE - $1::int AND date < CURRENT_DATE
+        COALESCE(AVG(pmd.engagement_rate) FILTER (
+          WHERE pmd.date >= CURRENT_DATE - $1::int AND pmd.date < CURRENT_DATE
         ), 0) AS avg_er,
-        COALESCE(AVG(engagement_rate) FILTER (
-          WHERE date >= CURRENT_DATE - ($1::int * 2) AND date < CURRENT_DATE - $1::int
+        COALESCE(AVG(pmd.engagement_rate) FILTER (
+          WHERE pmd.date >= CURRENT_DATE - ($1::int * 2) AND pmd.date < CURRENT_DATE - $1::int
         ), 0) AS avg_er_prev
-      FROM post_metric_daily
+      FROM post_metric_daily pmd
+      INNER JOIN social_post sp ON sp.id = pmd.post_id
+      INNER JOIN social_account sa ON sa.id = sp.account_id
+      WHERE sa.status != 'disconnected'
     `,
       [days]
     ),
@@ -58,13 +68,15 @@ export async function fetchKpiData(days: number): Promise<KpiData> {
     db.query<{ conv: string; conv_prev: string }>(
       `
       SELECT
-        COALESCE(SUM(conversion_count) FILTER (
-          WHERE occurred_date >= CURRENT_DATE - $1::int AND occurred_date <= CURRENT_DATE
+        COALESCE(SUM(lpc.conversion_count) FILTER (
+          WHERE lpc.occurred_date >= CURRENT_DATE - $1::int AND lpc.occurred_date <= CURRENT_DATE
         ), 0) AS conv,
-        COALESCE(SUM(conversion_count) FILTER (
-          WHERE occurred_date >= CURRENT_DATE - ($1::int * 2) AND occurred_date < CURRENT_DATE - $1::int
+        COALESCE(SUM(lpc.conversion_count) FILTER (
+          WHERE lpc.occurred_date >= CURRENT_DATE - ($1::int * 2) AND lpc.occurred_date < CURRENT_DATE - $1::int
         ), 0) AS conv_prev
-      FROM landing_page_conversion
+      FROM landing_page_conversion lpc
+      INNER JOIN social_account sa ON sa.id = lpc.account_id
+      WHERE sa.status != 'disconnected'
     `,
       [days]
     ),
@@ -73,13 +85,15 @@ export async function fetchKpiData(days: number): Promise<KpiData> {
     db.query<{ rev: string; rev_prev: string }>(
       `
       SELECT
-        COALESCE(SUM(amount_vnd) FILTER (
-          WHERE occurred_date >= CURRENT_DATE - $1::int AND occurred_date <= CURRENT_DATE
+        COALESCE(SUM(mr.amount_vnd) FILTER (
+          WHERE mr.occurred_date >= CURRENT_DATE - $1::int AND mr.occurred_date <= CURRENT_DATE
         ), 0) AS rev,
-        COALESCE(SUM(amount_vnd) FILTER (
-          WHERE occurred_date >= CURRENT_DATE - ($1::int * 2) AND occurred_date < CURRENT_DATE - $1::int
+        COALESCE(SUM(mr.amount_vnd) FILTER (
+          WHERE mr.occurred_date >= CURRENT_DATE - ($1::int * 2) AND mr.occurred_date < CURRENT_DATE - $1::int
         ), 0) AS rev_prev
-      FROM manual_revenue
+      FROM manual_revenue mr
+      INNER JOIN social_account sa ON sa.id = mr.account_id
+      WHERE sa.status != 'disconnected'
     `,
       [days]
     ),
@@ -89,16 +103,18 @@ export async function fetchKpiData(days: number): Promise<KpiData> {
     db.query<{ total_followers: string; total_followers_prev: string }>(
       `
       WITH latest_now AS (
-        SELECT DISTINCT ON (account_id) account_id, followers
-        FROM account_metric_daily
-        WHERE date < CURRENT_DATE
-        ORDER BY account_id, date DESC
+        SELECT DISTINCT ON (amd.account_id) amd.account_id, amd.followers
+        FROM account_metric_daily amd
+        INNER JOIN social_account sa ON sa.id = amd.account_id
+        WHERE amd.date < CURRENT_DATE AND sa.status != 'disconnected'
+        ORDER BY amd.account_id, amd.date DESC
       ),
       latest_prev AS (
-        SELECT DISTINCT ON (account_id) account_id, followers
-        FROM account_metric_daily
-        WHERE date < CURRENT_DATE - $1::int
-        ORDER BY account_id, date DESC
+        SELECT DISTINCT ON (amd.account_id) amd.account_id, amd.followers
+        FROM account_metric_daily amd
+        INNER JOIN social_account sa ON sa.id = amd.account_id
+        WHERE amd.date < CURRENT_DATE - $1::int AND sa.status != 'disconnected'
+        ORDER BY amd.account_id, amd.date DESC
       )
       SELECT
         COALESCE((SELECT SUM(followers) FROM latest_now), 0)  AS total_followers,

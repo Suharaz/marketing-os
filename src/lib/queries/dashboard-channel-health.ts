@@ -29,7 +29,9 @@ export async function fetchChannelHealth(): Promise<ChannelHealthData[]> {
       WHERE date >= CURRENT_DATE - 7
       ORDER BY account_id, date DESC
     ) latest
+    -- Filter sa.status != 'disconnected' để widget không show kênh đã hủy.
     JOIN social_account sa ON sa.id = latest.account_id
+      AND sa.status != 'disconnected'
     LEFT JOIN (
       SELECT DISTINCT ON (account_id)
         account_id, health_score

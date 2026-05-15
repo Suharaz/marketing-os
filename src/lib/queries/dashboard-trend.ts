@@ -24,30 +24,39 @@ export async function fetchTrendData(days: number): Promise<TrendDataPoint[]> {
     conversions: string;
   }>(
     `
+    -- Channel scope: every CTE INNER JOINs social_account and filters out
+    -- status='disconnected'. Without this, kênh đã hủy kết nối vẫn được tính
+    -- vào trend chart. Keeps 'active' + 'token_expired'.
     WITH metric_agg AS (
-      SELECT date,
-             SUM(total_reach)      AS reach,
-             SUM(total_engagement) AS engagement,
-             SUM(followers)        AS followers
-      FROM account_metric_daily
-      WHERE date >= CURRENT_DATE - $1::int AND date < CURRENT_DATE
-      GROUP BY date
+      SELECT amd.date,
+             SUM(amd.total_reach)      AS reach,
+             SUM(amd.total_engagement) AS engagement,
+             SUM(amd.followers)        AS followers
+      FROM account_metric_daily amd
+      INNER JOIN social_account sa ON sa.id = amd.account_id
+      WHERE amd.date >= CURRENT_DATE - $1::int AND amd.date < CURRENT_DATE
+        AND sa.status != 'disconnected'
+      GROUP BY amd.date
     ),
     post_agg AS (
-      SELECT published_at::date AS date,
+      SELECT sp.published_at::date AS date,
              COUNT(*) AS total_post
-      FROM social_post
-      WHERE published_at >= (CURRENT_DATE - $1::int)::timestamptz
-        AND published_at <  CURRENT_DATE::timestamptz
-      GROUP BY published_at::date
+      FROM social_post sp
+      INNER JOIN social_account sa ON sa.id = sp.account_id
+      WHERE sp.published_at >= (CURRENT_DATE - $1::int)::timestamptz
+        AND sp.published_at <  CURRENT_DATE::timestamptz
+        AND sa.status != 'disconnected'
+      GROUP BY sp.published_at::date
     ),
     conv_agg AS (
-      SELECT occurred_date AS date,
-             SUM(conversion_count) AS conversions
-      FROM landing_page_conversion
-      WHERE occurred_date >= CURRENT_DATE - $1::int
-        AND occurred_date <  CURRENT_DATE
-      GROUP BY occurred_date
+      SELECT lpc.occurred_date AS date,
+             SUM(lpc.conversion_count) AS conversions
+      FROM landing_page_conversion lpc
+      INNER JOIN social_account sa ON sa.id = lpc.account_id
+      WHERE lpc.occurred_date >= CURRENT_DATE - $1::int
+        AND lpc.occurred_date <  CURRENT_DATE
+        AND sa.status != 'disconnected'
+      GROUP BY lpc.occurred_date
     )
     -- FULL OUTER JOIN across all 3 sources so a date that appears in any
     -- source still produces a row (with 0 for missing series).
