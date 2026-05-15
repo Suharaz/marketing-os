@@ -39,14 +39,21 @@ export async function fetchTrendData(days: number): Promise<TrendDataPoint[]> {
       GROUP BY amd.date
     ),
     post_agg AS (
-      SELECT sp.published_at::date AS date,
+      -- Group post by PT date — align với account_metric_daily.date (PT) và
+      -- channel-detail.ts:fetchMetrics7d. Nếu để mặc định published_at::date
+      -- cast theo container TZ (UTC) thì post sáng VN bị đếm vào ngày UTC kế
+      -- tiếp, lệch 1 ngày so với chart channel detail.
+      -- KNOWN ISSUE: conv_agg dưới đây dùng VN date (occurred_date là DATE
+      -- không có time, không convert TZ được), nên ngày trên chart có thể
+      -- vẫn chênh 1 đơn vị giữa conversions và reach/posts.
+      SELECT (sp.published_at AT TIME ZONE 'America/Los_Angeles')::date AS date,
              COUNT(*) AS total_post
       FROM social_post sp
       INNER JOIN social_account sa ON sa.id = sp.account_id
       WHERE sp.published_at >= (CURRENT_DATE - $1::int)::timestamptz
         AND sp.published_at <  CURRENT_DATE::timestamptz
         AND sa.status != 'disconnected'
-      GROUP BY sp.published_at::date
+      GROUP BY (sp.published_at AT TIME ZONE 'America/Los_Angeles')::date
     ),
     conv_agg AS (
       SELECT lpc.occurred_date AS date,
