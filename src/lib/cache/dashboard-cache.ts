@@ -1,19 +1,25 @@
 // Tag-based cache wrappers around dashboard queries.
 //
-// Why this pattern (not staleTimes / unstable_cache duration):
-//   The user complaint was "cache should reset at 23:30, not 24h from fetch".
-//   Duration-based caches treat every fetch independently — N visitors at
-//   different times = N expiry windows. Tag-based caches expire ONLY when
-//   the data source actually changes (cron job runs, user submits a form),
-//   regardless of when the cache was warmed.
+// Caching strategy:
+//   - revalidate: 300s  → cache auto-expires after 5 minutes. This handles the
+//     cron-job case: cron writes new rows to DB, can't call revalidateTag
+//     (no request context in Next.js 16 instrumentation runtime), but the TTL
+//     guarantees dashboard data refreshes at worst 5 min after cron run.
+//   - tags: [DASHBOARD_TAG] → user-triggered mutations (revenue submit, manual
+//     sync click) still call invalidateDashboard() for IMMEDIATE refresh.
+//     Those callers run inside Route Handlers, so revalidateTag works there.
+//
+// Why not revalidate: false?
+//   In Next.js 16, revalidateTag() requires a request store and throws
+//   "Invariant: static generation store missing" when called from cron jobs.
+//   TTL is the simplest fallback: cron writes data, cache auto-expires,
+//   dashboard refreshes on next visit. KISS.
 //
 // Workflow:
 //   1. Server Components call get*() — first hit goes to DB, subsequent hits
-//      return cached value with no DB roundtrip.
-//   2. Cron jobs and mutation handlers call invalidateDashboard() after
-//      writing — next get*() call refetches from DB.
-//   3. revalidate: false means "never auto-expire" — invalidation is the
-//      ONLY way the cache empties.
+//      return cached value (up to 5 min old).
+//   2. Mutation handlers (Route Handlers / Server Actions) call
+//      invalidateDashboard() for immediate refresh — bypasses TTL.
 
 import { unstable_cache, revalidateTag } from 'next/cache';
 import { fetchKpiData } from '@/lib/queries/dashboard-kpi';
@@ -25,37 +31,39 @@ import { fetchRecentRevenue } from '@/lib/queries/revenue';
  *  win from finer granularity proves measurable. */
 export const DASHBOARD_TAG = 'dashboard';
 
+/** 5 minutes — long enough to absorb burst traffic, short enough that cron
+ *  writes (which can't invalidate) show up within one coffee break. */
+const CACHE_TTL_SECONDS = 100;
+
 export const getKpiData = unstable_cache(
   async (days: number) => fetchKpiData(days),
   ['kpi-data-v1'],
-  { tags: [DASHBOARD_TAG], revalidate: false }
+  { tags: [DASHBOARD_TAG], revalidate: CACHE_TTL_SECONDS }
 );
 
 export const getTrendData = unstable_cache(
   async (days: number) => fetchTrendData(days),
   ['trend-data-v1'],
-  { tags: [DASHBOARD_TAG], revalidate: false }
+  { tags: [DASHBOARD_TAG], revalidate: CACHE_TTL_SECONDS }
 );
 
 export const getRecentRevenue = unstable_cache(
   async (limit: number) => fetchRecentRevenue(limit),
   ['recent-revenue-v1'],
-  { tags: [DASHBOARD_TAG], revalidate: false }
+  { tags: [DASHBOARD_TAG], revalidate: CACHE_TTL_SECONDS }
 );
 
 /**
- * Drop every cached dashboard entry. Call this after any write that affects
- * what the dashboard displays:
- *   - Cron job D (Ladipage sync) finishes
- *   - Cron job A (page insights) finishes
- *   - Cron job B (posts ingestion) finishes
- *   - Manual /api/sync/fetch-now finishes
- *   - User submits / deletes a revenue entry
+ * Force-refresh dashboard cache immediately. Only call from Route Handlers
+ * or Server Actions — these have the request context revalidateTag requires.
+ * Cron jobs MUST NOT call this; they rely on the TTL to auto-expire instead.
  *
- * Cheap to call — it's a no-op when nothing's cached.
+ * Use for:
+ *   - User submits / deletes a revenue entry (revenue routes)
+ *   - Manual /api/sync/fetch-now finishes
  */
 export function invalidateDashboard(): void {
-  // 'max' profile = clear the tag immediately. Required positional arg in
+  // 'max' profile = stale-while-revalidate. Required positional arg in
   // Next.js 16; the single-arg signature was deprecated.
   revalidateTag(DASHBOARD_TAG, 'max');
 }

@@ -14,7 +14,6 @@ import {
   upsertPostMetricDaily,
 } from '@/lib/cron/upsert-helpers';
 import { handleAccountError } from '@/lib/cron/account-error-handler';
-import { invalidateDashboard } from '@/lib/cache/dashboard-cache';
 import { callContext, type CallEntry } from '@/lib/sync/call-context';
 import type { SocialPostRow, PostMetricDailyRow } from '@/lib/cron/upsert-helpers';
 
@@ -147,7 +146,6 @@ export async function runPostsIngestionJob(): Promise<void> {
     }
   }
 
-  if (totalRecords > 0) invalidateDashboard();
-
+  // Cache TTL (5 min) handles refresh — see lib/cache/dashboard-cache.ts.
   console.log(`[job-posts-ingestion] Done — ${totalRecords} metric rows upserted`);
 }

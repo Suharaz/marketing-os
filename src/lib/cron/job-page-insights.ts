@@ -11,7 +11,6 @@ import { getTodayUntilUtcSec } from '@/lib/fb/pt-date';
 import { startSyncLog, finishSyncLog } from '@/lib/cron/sync-log';
 import { upsertAccountMetricDaily } from '@/lib/cron/upsert-helpers';
 import { handleAccountError } from '@/lib/cron/account-error-handler';
-import { invalidateDashboard } from '@/lib/cache/dashboard-cache';
 import { callContext, type CallEntry } from '@/lib/sync/call-context';
 import type { AccountMetricDailyRow } from '@/lib/cron/upsert-helpers';
 
@@ -123,7 +122,7 @@ export async function runPageInsightsJob(): Promise<void> {
     }
   }
 
-  if (totalRecords > 0) invalidateDashboard();
-
+  // Cache TTL (5 min) handles refresh — cron can't call revalidateTag in
+  // Next.js 16 (no request context). See lib/cache/dashboard-cache.ts.
   console.log(`[job-page-insights] Done — ${totalRecords} rows upserted`);
 }
