@@ -68,10 +68,14 @@ export async function upsertAccountMetricDaily(
          -- thay vì clobber. Áp dụng cho mọi metric mà 0 = "chưa có data" thay vì
          -- "thật sự bằng 0". Ngăn row bị stuck ở 0 vĩnh viễn khi FB delay 1-2 ngày.
          followers            = COALESCE(NULLIF(EXCLUDED.followers, 0), account_metric_daily.followers),
-         -- follower_growth và posts_count GIỮ EXCLUDED — 0 là giá trị hợp lệ
-         -- (ngày không có follower mới, ngày không đăng bài).
+         -- follower_growth GIỮ EXCLUDED — 0 là giá trị hợp lệ (ngày không có
+         -- follower mới). Còn posts_count thì page_insights cron hardcode = 0
+         -- vì FB không trả số bài qua endpoint đó (chỉ run-sync / posts-ingestion
+         -- mới tính từ social_post). Nếu để EXCLUDED clobber, cron page_insights
+         -- (chạy 3×/ngày) sẽ wipe posts_count thật về 0 — giữ giá trị cũ khi
+         -- EXCLUDED = 0 để tránh race condition đó.
          follower_growth      = EXCLUDED.follower_growth,
-         posts_count          = EXCLUDED.posts_count,
+         posts_count          = COALESCE(NULLIF(EXCLUDED.posts_count, 0), account_metric_daily.posts_count),
          total_reach          = COALESCE(NULLIF(EXCLUDED.total_reach, 0), account_metric_daily.total_reach),
          total_reach_unique   = COALESCE(NULLIF(EXCLUDED.total_reach_unique, 0), account_metric_daily.total_reach_unique),
          total_engagement     = COALESCE(NULLIF(EXCLUDED.total_engagement, 0), account_metric_daily.total_engagement),

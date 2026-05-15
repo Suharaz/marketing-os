@@ -45,7 +45,7 @@ function toMetricRows(
     date: day.date,
     followers: day.followers,
     follower_growth: day.follower_growth,
-    posts_count: 0, // page_insights does not provide post count — kept from prior row via UPSERT
+    posts_count: 0, // page_insights API không trả posts_count → upsert giữ giá trị cũ (xem upsert-helpers.ts)
     total_reach: day.total_reach,
     total_reach_unique: day.total_reach_unique,
     total_engagement: day.total_engagement,
