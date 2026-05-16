@@ -1,35 +1,22 @@
-// Channel card — hiển thị các trường có sẵn trong DB.
-// Bỏ qua: persona, tier, reach/post, engagement_rate, posting_frequency, owner footer
-// (chưa có cột tương ứng trong schema).
+// Channel card — list view tại /channels.
+//
+// Sau revamp:
+//   - Bỏ 2 badge Facebook + Hoạt động (icon vuông + dot status đã đủ semantic)
+//   - StatusDot xanh ripple/halo khi active (animate-ping)
+//   - Page ID + nút copy clipboard (CopyIdButton tự stopPropagation để không trigger <Link>)
+//   - Sync time dời xuống dưới Page ID (không còn trong stats grid)
+//   - Stats grid cell 4: Sync → Lead (30 ngày qua từ manual_conversion)
+//   - HealthTooltip ⓘ hover hiện công thức 4 sub-score
 
 import Link from 'next/link';
-import { Badge } from '@/components/ui/badge';
 import type { ChannelListItem } from '@/lib/queries/channels-list';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-
-// ─── Platform meta: màu nền icon vuông + label hiển thị ───────────────
-const PLATFORM_META: Record<
-  string,
-  { label: string; bg: string; letter: string }
-> = {
-  facebook: { label: 'Facebook', bg: 'bg-blue-600', letter: 'f' },
-  instagram: { label: 'Instagram', bg: 'bg-pink-500', letter: 'IG' },
-  tiktok: { label: 'TikTok', bg: 'bg-zinc-900', letter: 'TT' },
-  youtube: { label: 'YouTube', bg: 'bg-red-600', letter: 'YT' },
-  threads: { label: 'Threads', bg: 'bg-zinc-800', letter: 'T' },
-  zalo: { label: 'Zalo', bg: 'bg-sky-500', letter: 'Z' },
-};
-
-const STATUS_CONFIG: Record<
-  string,
-  { label: string; variant: 'default' | 'destructive' | 'secondary' | 'outline' }
-> = {
-  active: { label: 'Hoạt động', variant: 'default' },
-  token_expired: { label: 'Token hết hạn', variant: 'destructive' },
-  disconnected: { label: 'Ngắt kết nối', variant: 'secondary' },
-};
+import { StatusDot } from './_components/status-dot';
+import { CopyIdButton } from './_components/copy-id-button';
+import { HealthTooltip } from './_components/health-tooltip';
+import { PlatformIcon } from './_components/platform-icon';
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 function formatCompact(n: number | null): string {
@@ -57,15 +44,6 @@ interface Props {
 }
 
 export function ChannelCard({ channel }: Props) {
-  const platform = PLATFORM_META[channel.platform] ?? {
-    label: channel.platform,
-    bg: 'bg-zinc-500',
-    letter: '?',
-  };
-  const statusCfg =
-    STATUS_CONFIG[channel.status] ??
-    { label: channel.status, variant: 'outline' as const };
-
   const syncedAgo = channel.lastSyncedAt
     ? formatDistanceToNow(new Date(channel.lastSyncedAt), {
         addSuffix: true,
@@ -78,48 +56,52 @@ export function ChannelCard({ channel }: Props) {
       href={`/channels/${channel.id}`}
       className="block rounded-xl border border-zinc-200 bg-white p-5 shadow-sm hover:shadow-md hover:border-blue-300 transition-all"
     >
-      {/* ─── Header: icon + name + health score (góc phải) ─── */}
+      {/* ─── Header: icon + name/id/sync + health (góc phải) ─── */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0">
-          {/* Icon vuông theo platform */}
-          <div
-            className={cn(
-              'flex size-12 shrink-0 items-center justify-center rounded-lg text-white text-base font-bold',
-              platform.bg
-            )}
-          >
-            {platform.letter}
-          </div>
+          <PlatformIcon platform={channel.platform} size="md" />
 
-          {/* Name + tags */}
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-zinc-900 truncate">{channel.name}</p>
-            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-              <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-                {platform.label}
-              </Badge>
-              <Badge variant={statusCfg.variant} className="text-[10px]">
-                {statusCfg.label}
-              </Badge>
+            {/* Row 1: status dot + tên page */}
+            <div className="flex items-center gap-2">
+              <StatusDot status={channel.status} />
+              <p className="font-semibold text-zinc-900 truncate">{channel.name}</p>
             </div>
+
+            {/* Row 2: Page ID + copy */}
+            <p className="mt-1 text-xs text-zinc-500 font-mono flex items-center min-w-0">
+              <span className="truncate">ID: {channel.externalId}</span>
+              <CopyIdButton value={channel.externalId} />
+            </p>
+
+            {/* Row 3: Sync time (đã rời khỏi stats grid) */}
+            <p className="text-xs text-zinc-500 mt-0.5">Sync: {syncedAgo}</p>
           </div>
         </div>
 
-        {/* Health score góc phải — bự nổi bật như mockup */}
+        {/* Health score góc phải — số bự + tooltip công thức */}
         <div className="text-right shrink-0">
-          <p className={cn('text-2xl font-bold leading-none', healthColor(channel.healthScore))}>
+          <p
+            className={cn(
+              'text-2xl font-bold leading-none',
+              healthColor(channel.healthScore)
+            )}
+          >
             {channel.healthScore !== null ? channel.healthScore.toFixed(0) : '—'}
           </p>
-          <p className="text-[10px] uppercase tracking-wide text-zinc-400 mt-1">Health</p>
+          <div className="flex items-center justify-end gap-1 mt-1">
+            <p className="text-[10px] uppercase tracking-wide text-zinc-400">Health</p>
+            <HealthTooltip />
+          </div>
         </div>
       </div>
 
-      {/* ─── Stats row 4 cột: Followers · Reach/post · ER · Sync ─── */}
+      {/* ─── Stats row 4 cột: Followers · Reach/post · ER · Lead ─── */}
       <div className="mt-4 grid grid-cols-4 gap-2 border-t border-zinc-100 pt-3">
         <Stat label="Followers" value={formatCompact(channel.followers)} />
         <Stat label="Reach/post" value={formatCompact(channel.avgReachPerPost)} />
         <Stat label="ER" value={formatPercent(channel.avgEngagementRate)} />
-        <Stat label="Sync" value={syncedAgo} compact />
+        <Stat label="Lead" value={formatCompact(channel.lead30d)} />
       </div>
 
       {/* ─── Owner footer ─── */}
@@ -135,26 +117,10 @@ export function ChannelCard({ channel }: Props) {
   );
 }
 
-// Stat cell — `compact` cho field text dài (sync time) dùng font nhỏ hơn.
-function Stat({
-  label,
-  value,
-  compact = false,
-}: {
-  label: string;
-  value: string;
-  compact?: boolean;
-}) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p
-        className={cn(
-          compact ? 'text-xs font-medium leading-tight' : 'text-base font-semibold',
-          'text-zinc-900'
-        )}
-      >
-        {value}
-      </p>
+      <p className="text-base font-semibold text-zinc-900 tabular-nums">{value}</p>
       <p className="text-[10px] uppercase tracking-wide text-zinc-500 mt-0.5">
         {label}
       </p>
