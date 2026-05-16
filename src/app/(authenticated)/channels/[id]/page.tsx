@@ -14,6 +14,7 @@ import { PersonaPanel } from './persona-panel';
 import { MetricsTrendChart } from './metrics-trend-chart';
 import { RecentPostsList } from './recent-posts-list';
 import { SyncLogTable } from './sync-log-table';
+import { BackButton } from './back-button';
 
 export const metadata: Metadata = {
   title: 'Chi tiết kênh — Marketing OS',
@@ -57,6 +58,7 @@ export default async function ChannelDetailPage({ params }: PageProps) {
 
   return (
     <div className="flex flex-col gap-6">
+      <BackButton />
       <ChannelHeader
         accountId={account.id}
         externalId={account.externalId}

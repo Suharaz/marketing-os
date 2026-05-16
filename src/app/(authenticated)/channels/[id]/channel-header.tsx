@@ -1,25 +1,21 @@
 'use client';
 
+// Channel detail header — sau revamp:
+//   - Bỏ 2 badge Facebook + Hoạt động (đồng nhất với list card)
+//   - PlatformIcon vuông + StatusDot ripple/halo cạnh tên
+//   - Page ID + CopyIdButton + Sync time inline trên 1 dòng (ngăn cách bằng ·)
+//   - Reuse component từ _components/ (DRY với card)
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { OwnerSelector } from './owner-selector';
-
-const STATUS_CONFIG: Record<string, { label: string; variant: 'default' | 'destructive' | 'secondary' | 'outline' }> = {
-  active: { label: 'Hoạt động', variant: 'default' },
-  token_expired: { label: 'Token hết hạn', variant: 'destructive' },
-  disconnected: { label: 'Ngắt kết nối', variant: 'secondary' },
-};
-
-const PLATFORM_LABELS: Record<string, string> = {
-  facebook: 'Facebook',
-  instagram: 'Instagram',
-  tiktok: 'TikTok',
-};
+import { StatusDot } from '../_components/status-dot';
+import { CopyIdButton } from '../_components/copy-id-button';
+import { PlatformIcon } from '../_components/platform-icon';
 
 interface MemberOption {
   id: string;
@@ -59,7 +55,6 @@ export function ChannelHeader({
   const [syncing, setSyncing] = useState(false);
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
 
-  const statusCfg = STATUS_CONFIG[status] ?? { label: status, variant: 'outline' as const };
   const syncedAgo = lastSyncedAt
     ? formatDistanceToNow(new Date(lastSyncedAt), { addSuffix: true, locale: vi })
     : 'Chưa sync';
@@ -91,8 +86,10 @@ export function ChannelHeader({
 
       // Backend trả 202 (fire-and-forget): sync chạy background, có thể mất vài phút.
       // Kết quả thực tế sẽ phản ánh ở "Lần sync cuối" sau khi user refresh trang.
-      const data = await res.json() as { message?: string; status?: string };
-      toast.info(data.message ?? 'Đang đồng bộ ở phía sau — vài phút nữa kết quả sẽ cập nhật.');
+      const data = (await res.json()) as { message?: string; status?: string };
+      toast.info(
+        data.message ?? 'Đang đồng bộ ở phía sau — vài phút nữa kết quả sẽ cập nhật.'
+      );
       setCooldownUntil(Date.now() + 60_000);
     } catch {
       toast.error('Lỗi kết nối. Thử lại sau.');
@@ -102,7 +99,8 @@ export function ChannelHeader({
   }
 
   async function handleDisconnect() {
-    if (!confirm(`Ngắt kết nối kênh "${name}"? Dữ liệu bài viết sẽ được giữ lại.`)) return;
+    if (!confirm(`Ngắt kết nối kênh "${name}"? Dữ liệu bài viết sẽ được giữ lại.`))
+      return;
 
     try {
       const res = await fetch(`/api/channels/${accountId}`, { method: 'DELETE' });
@@ -118,35 +116,44 @@ export function ChannelHeader({
   }
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-2xl font-bold text-zinc-900">{name}</h1>
-          <Badge variant="outline">{PLATFORM_LABELS[platform] ?? platform}</Badge>
-          <Badge variant={statusCfg.variant}>{statusCfg.label}</Badge>
-        </div>
-        <p className="text-xs text-zinc-500 font-mono mt-0.5">
-          ID: {externalId}
-        </p>
-        <p className="text-sm text-zinc-500">Lần sync cuối: {syncedAgo}</p>
-        <div className="flex items-center gap-2 mt-1">
-          <span className="text-sm text-zinc-500">Người phụ trách:</span>
-          {isAdmin ? (
-            <OwnerSelector
-              accountId={accountId}
-              currentOwnerId={ownerId}
-              members={members}
-            />
-          ) : (
-            // Non-admin: read-only — không có dropdown, chỉ hiện tên hoặc "Chưa gán"
-            <span className="text-sm font-medium text-zinc-700">
-              {ownerName ?? <span className="italic text-zinc-400">Chưa gán</span>}
-            </span>
-          )}
+    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+      <div className="flex items-start gap-4 min-w-0">
+        <PlatformIcon platform={platform} size="lg" />
+
+        <div className="flex flex-col gap-1 min-w-0">
+          {/* Row 1: dot status + tên page (h1) */}
+          <div className="flex items-center gap-2">
+            <StatusDot status={status} />
+            <h1 className="text-2xl font-bold text-zinc-900 truncate">{name}</h1>
+          </div>
+
+          {/* Row 2: Page ID + copy + sync inline (· separator) */}
+          <p className="text-xs text-zinc-500 font-mono flex items-center flex-wrap gap-x-1">
+            <span>ID: {externalId}</span>
+            <CopyIdButton value={externalId} />
+            <span className="text-zinc-300 mx-1">·</span>
+            <span className="font-sans">Sync: {syncedAgo}</span>
+          </p>
+
+          {/* Row 3: Người phụ trách */}
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-sm text-zinc-500">Người phụ trách:</span>
+            {isAdmin ? (
+              <OwnerSelector
+                accountId={accountId}
+                currentOwnerId={ownerId}
+                members={members}
+              />
+            ) : (
+              <span className="text-sm font-medium text-zinc-700">
+                {ownerName ?? <span className="italic text-zinc-400">Chưa gán</span>}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         <Button
           onClick={handleSync}
           disabled={syncing || isCoolingDown}
@@ -156,11 +163,7 @@ export function ChannelHeader({
           {syncing ? 'Đang đồng bộ…' : 'Đồng bộ ngay'}
         </Button>
         {isAdmin && (
-          <Button
-            onClick={handleDisconnect}
-            variant="destructive"
-            size="sm"
-          >
+          <Button onClick={handleDisconnect} variant="destructive" size="sm">
             Hủy kết nối
           </Button>
         )}

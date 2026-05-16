@@ -69,8 +69,16 @@ export function RecentPostsList({ posts }: Props) {
                     )}
                   </div>
 
-                  {/* Hàng 2: 3 metric (reactions/comments/shares) — emoji icon để khỏi import lib mới */}
+                  {/* Hàng 2: views + 3 metric (reactions/comments/shares).
+                      views = video_views nếu post là video, fallback impressions.
+                      Ẩn hoàn toàn khi cả 2 = 0/null (computeViews trả null). */}
                   <div className="flex items-center gap-3 mt-2 text-xs text-zinc-600">
+                    {post.views !== null && post.views > 0 && (
+                      <span title="Lượt xem" className="flex items-center gap-1">
+                        <span aria-hidden>👁</span>
+                        <span className="tabular-nums">{formatCount(post.views)}</span>
+                      </span>
+                    )}
                     <span title="Tương tác" className="flex items-center gap-1">
                       <span aria-hidden>❤</span>
                       <span className="tabular-nums">{formatCount(post.reactions)}</span>
