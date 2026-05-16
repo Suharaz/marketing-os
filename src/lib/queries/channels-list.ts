@@ -78,12 +78,14 @@ export async function fetchChannelsList(
          ORDER BY sp.id, pmd.date DESC
        ) p
      ) pm ON TRUE
-     -- Tổng lead 30 ngày từ manual_conversion. COALESCE → 0 nếu không có row.
+     -- Tổng lead 30 ngày từ landing_page_conversion (Ladipage sync cron).
+     -- Bảng cũ manual_conversion đã bị migration 015 drop và thay bằng bảng này.
+     -- COALESCE → 0 nếu không có row.
      LEFT JOIN LATERAL (
        SELECT COALESCE(SUM(conversion_count), 0)::INT AS lead_30d
-       FROM manual_conversion
-       WHERE source_account_id = sa.id
-         AND occurred_at >= NOW() - INTERVAL '30 days'
+       FROM landing_page_conversion
+       WHERE account_id = sa.id
+         AND occurred_date >= CURRENT_DATE - INTERVAL '30 days'
      ) lc ON TRUE
      LEFT JOIN team_member tm ON tm.id = sa.owner_member_id
      WHERE ($1::text IS NULL OR sa.platform = $1::platform_t)

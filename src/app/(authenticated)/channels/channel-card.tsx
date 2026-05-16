@@ -5,7 +5,7 @@
 //   - StatusDot xanh ripple/halo khi active (animate-ping)
 //   - Page ID + nút copy clipboard (CopyIdButton tự stopPropagation để không trigger <Link>)
 //   - Sync time dời xuống dưới Page ID (không còn trong stats grid)
-//   - Stats grid cell 4: Sync → Lead (30 ngày qua từ manual_conversion)
+//   - Stats grid cell 4: Sync → Lead (30 ngày qua từ landing_page_conversion)
 //   - HealthTooltip ⓘ hover hiện công thức 4 sub-score
 
 import Link from 'next/link';
