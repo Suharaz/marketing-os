@@ -2,6 +2,8 @@ import { db } from '@/lib/db';
 
 export interface ChannelListItem {
   id: string;
+  // Platform-specific ID (vd FB Page ID) — hiển thị cho admin verify + copy lên clipboard
+  externalId: string;
   name: string;
   platform: string;
   status: string;
@@ -14,6 +16,8 @@ export interface ChannelListItem {
   avgEngagementRate: number | null;
   // Tên người quản lý kênh (team_member.name) — null nếu chưa gán
   ownerName: string | null;
+  // Tổng lead 30 ngày qua từ manual_conversion (mặc định 0 nếu chưa có)
+  lead30d: number;
 }
 
 export interface ChannelsListFilter {
@@ -35,6 +39,7 @@ export async function fetchChannelsList(
 
   const res = await db.query<{
     id: string;
+    external_id: string;
     name: string;
     platform: string;
     status: string;
@@ -44,11 +49,13 @@ export async function fetchChannelsList(
     avg_reach_per_post: string | null;
     avg_engagement_rate: string | null;
     owner_name: string | null;
+    lead_30d: string;
   }>(
-    `SELECT sa.id, sa.name, sa.platform, sa.status, sa.last_synced_at,
+    `SELECT sa.id, sa.external_id, sa.name, sa.platform, sa.status, sa.last_synced_at,
             am.followers, ch.health_score,
             pm.avg_reach_per_post, pm.avg_engagement_rate,
-            tm.name AS owner_name
+            tm.name AS owner_name,
+            lc.lead_30d
      FROM social_account sa
      LEFT JOIN LATERAL (
        SELECT followers FROM account_metric_daily
@@ -71,6 +78,13 @@ export async function fetchChannelsList(
          ORDER BY sp.id, pmd.date DESC
        ) p
      ) pm ON TRUE
+     -- Tổng lead 30 ngày từ manual_conversion. COALESCE → 0 nếu không có row.
+     LEFT JOIN LATERAL (
+       SELECT COALESCE(SUM(conversion_count), 0)::INT AS lead_30d
+       FROM manual_conversion
+       WHERE source_account_id = sa.id
+         AND occurred_at >= NOW() - INTERVAL '30 days'
+     ) lc ON TRUE
      LEFT JOIN team_member tm ON tm.id = sa.owner_member_id
      WHERE ($1::text IS NULL OR sa.platform = $1::platform_t)
        AND (
@@ -86,6 +100,7 @@ export async function fetchChannelsList(
 
   return res.rows.map((row) => ({
     id: row.id,
+    externalId: row.external_id,
     name: row.name,
     platform: row.platform,
     status: row.status,
@@ -97,6 +112,7 @@ export async function fetchChannelsList(
     avgEngagementRate:
       row.avg_engagement_rate !== null ? Number(row.avg_engagement_rate) : null,
     ownerName: row.owner_name,
+    lead30d: Number(row.lead_30d),
   }));
 }
 

@@ -45,6 +45,9 @@ export interface ChannelPost {
   reactions: number | null;
   comments: number | null;
   shares: number | null;
+  // Lượt xem hợp nhất: ưu tiên video_views (nếu >0), fallback impressions.
+  // null khi cả hai = 0/null → UI ẩn hoàn toàn icon 👁.
+  views: number | null;
 }
 
 export interface SyncLogEntry {
@@ -192,14 +195,18 @@ export async function fetchRecentPosts(
     reactions: number | null;
     comments: number | null;
     shares: number | null;
+    video_views: number | null;
+    impressions: number | null;
   }>(
-    // LATERAL lấy 1 row metric mới nhất / post — đảm bảo ER + 3 chỉ số đồng nhất cùng snapshot
+    // LATERAL lấy 1 row metric mới nhất / post — đảm bảo ER + các chỉ số đồng nhất cùng snapshot.
+    // video_views + impressions raw → JS layer apply COALESCE để tránh CASE/IF rườm rà ở SQL.
     `SELECT sp.id, sp.external_id, sp.content, sp.media_url, sp.permalink,
             sp.published_at,
-            pm.engagement_rate, pm.reactions, pm.comments, pm.shares
+            pm.engagement_rate, pm.reactions, pm.comments, pm.shares,
+            pm.video_views, pm.impressions
      FROM social_post sp
      LEFT JOIN LATERAL (
-       SELECT engagement_rate, reactions, comments, shares
+       SELECT engagement_rate, reactions, comments, shares, video_views, impressions
        FROM post_metric_daily
        WHERE post_id = sp.id ORDER BY date DESC LIMIT 1
      ) pm ON TRUE
@@ -221,7 +228,24 @@ export async function fetchRecentPosts(
     reactions: row.reactions,
     comments: row.comments,
     shares: row.shares,
+    // Ưu tiên video_views nếu >0 (post video), fallback impressions, null nếu cả hai trống.
+    views: computeViews(row.video_views, row.impressions),
   }));
+}
+
+/**
+ * Hợp nhất video_views + impressions thành 1 số "lượt xem" hiển thị cho UI.
+ * - Post video: video_views thường > 0 → dùng nó.
+ * - Post text/image: video_views = 0 → fallback impressions.
+ * - Cả hai = 0/null → trả null để UI ẩn icon 👁 hoàn toàn.
+ */
+function computeViews(
+  videoViews: number | null,
+  impressions: number | null
+): number | null {
+  if (videoViews !== null && videoViews > 0) return videoViews;
+  if (impressions !== null && impressions > 0) return impressions;
+  return null;
 }
 
 export async function fetchSyncLog(
