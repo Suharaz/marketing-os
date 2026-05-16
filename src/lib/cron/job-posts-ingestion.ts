@@ -1,4 +1,4 @@
-// Job B — Posts + post metrics ingestion (runs 1×/day at 02:30).
+// Job B — Posts + post metrics ingestion (runs 3×/day at 02:30, 10:30, 18:30 UTC).
 // For each active account: fetches posts from last 7 days, UPSERTs social_post
 // then UPSERTs today's snapshot of post_metric_daily.
 // 7-day window ensures re-sync of posts whose metrics are still accumulating.

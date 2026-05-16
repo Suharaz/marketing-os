@@ -31,8 +31,8 @@ const JOB_LABEL: Record<SyncTypeT, string> = {
 };
 
 const JOB_SCHEDULE: Record<SyncTypeT, string> = {
-  page_insights: '02:00, 10:00, 18:00 UTC',
-  posts: '02:30 UTC daily',
+  page_insights: '02:00 UTC daily',
+  posts: '02:30, 10:30, 18:30 UTC',
   health_recompute: '03:00 UTC daily',
   manual_refresh: 'On demand',
   ladipage: '23:30 Asia/Ho_Chi_Minh daily',

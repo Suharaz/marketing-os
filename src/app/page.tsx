@@ -111,7 +111,7 @@ export default async function LandingPage() {
             <FeatureCard
               icon={<Activity className="size-5" />}
               title="Auto-sync FB Insights"
-              desc="3 lần/ngày (02:00, 10:00, 18:00 UTC) — page reach, follower growth, engagement, post-level metrics."
+              desc="Page insights 1×/ngày (09:00 VN), posts metrics 3×/ngày (09:30, 17:30, 01:30 VN) — reach, follower growth, engagement."
             />
             <FeatureCard
               icon={<Sparkles className="size-5" />}

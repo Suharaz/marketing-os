@@ -18,8 +18,8 @@ declare global {
  * no-ops thanks to the globalThis singleton guard.
  *
  * Schedules:
- *   Job A — page_insights:    0 2,10,18 * * *   UTC      (3× daily)
- *   Job B — posts_ingestion:  30 2 * * *        UTC      (daily 02:30)
+ *   Job A — page_insights:    0 2 * * *         UTC      (daily 02:00 = 09:00 VN)
+ *   Job B — posts_ingestion:  30 2,10,18 * * *  UTC      (3× daily — 09:30, 17:30, 01:30 VN)
  *   Job C — health_recompute: 0 3 * * *         UTC      (daily 03:00)
  *   Job D — ladipage_sync:    30 23 * * *       VN time  (daily 23:30 Asia/Ho_Chi_Minh)
  */
@@ -29,15 +29,16 @@ export function initCrons(): void {
     return;
   }
 
-  // Job A: page insights — 3× daily
-  cron.schedule('0 2,10,18 * * *', () => {
+  // Job A: page insights — 1× daily at 02:00 UTC (09:00 VN)
+  cron.schedule('0 2 * * *', () => {
     runPageInsightsJob().catch((err) =>
       console.error('[cron] job-page-insights uncaught error:', err)
     );
   });
 
-  // Job B: posts ingestion — daily at 02:30
-  cron.schedule('30 2 * * *', () => {
+  // Job B: posts ingestion — 3× daily, offset 30min sau page_insights để
+  // tránh đụng FB API quota cùng lúc. Chạy 02:30, 10:30, 18:30 UTC.
+  cron.schedule('30 2,10,18 * * *', () => {
     runPostsIngestionJob().catch((err) =>
       console.error('[cron] job-posts-ingestion uncaught error:', err)
     );
@@ -84,8 +85,8 @@ export function initCrons(): void {
     );
   }
   console.log('[cron] schedules:');
-  console.log('  - page_insights:    0 2,10,18 * * *  (UTC)');
-  console.log('  - posts_ingestion:  30 2 * * *        (UTC)');
+  console.log('  - page_insights:    0 2 * * *         (UTC)');
+  console.log('  - posts_ingestion:  30 2,10,18 * * *  (UTC)');
   console.log('  - health_recompute: 0 3 * * *         (UTC)');
   console.log('  - ladipage_sync:    30 23 * * *       (Asia/Ho_Chi_Minh)');
 

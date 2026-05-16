@@ -2,7 +2,7 @@ import { KpiHeroCard } from './kpi-hero-card';
 import type { KpiData } from '@/lib/queries/dashboard-kpi';
 import type { TrendDataPoint } from '@/lib/queries/dashboard-trend';
 
-const EMPTY_MESSAGE = 'Chờ cron sync đầu tiên (chạy 02:00, 10:00, 18:00)';
+const EMPTY_MESSAGE = 'Chờ cron sync đầu tiên (page_insights chạy 09:00 VN)';
 
 function isAllZero(data: KpiData): boolean {
   return (

@@ -1,4 +1,4 @@
-// Job A — Page Insights ingestion (runs 3×/day at 02:00, 10:00, 18:00).
+// Job A — Page Insights ingestion (runs 1×/day at 02:00 UTC = 09:00 VN).
 // For each active account: fetches 2-day window of page-level insights from FB,
 // parses into account_metric_daily rows, UPSERTs to DB.
 // Per-account errors are isolated — one failure does not abort the batch.

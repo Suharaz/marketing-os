@@ -47,8 +47,8 @@ export async function GET(): Promise<NextResponse> {
       uptimeSec: Math.floor(process.uptime()),
     },
     schedules: [
-      { name: 'page_insights',    cron: '0 2,10,18 * * *', tz: 'UTC' },
-      { name: 'posts_ingestion',  cron: '30 2 * * *',      tz: 'UTC' },
+      { name: 'page_insights',    cron: '0 2 * * *',        tz: 'UTC' },
+      { name: 'posts_ingestion',  cron: '30 2,10,18 * * *', tz: 'UTC' },
       { name: 'health_recompute', cron: '0 3 * * *',       tz: 'UTC' },
       { name: 'ladipage_sync',    cron: '30 23 * * *',     tz: 'Asia/Ho_Chi_Minh' },
     ],
