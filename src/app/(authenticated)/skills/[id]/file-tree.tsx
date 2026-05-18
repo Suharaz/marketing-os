@@ -1,15 +1,15 @@
 'use client';
 
-// Tree view bên trái + content viewer bên phải.
-// Click vào file → fetch /api/skills/[id]/file?path=... → hiện text trong panel.
+// Tree view bên trái + Viewer bên phải. Tree quản state `expanded` +
+// `selectedPath`. Viewer (file riêng) tự handle fetch + render theo kind.
 
 import { useMemo, useState } from 'react';
-import { ChevronRight, ChevronDown, File, Folder, FolderOpen, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { ChevronRight, ChevronDown, File, Folder, FolderOpen } from 'lucide-react';
 import type { ZipEntryNode } from '@/lib/skill-lib/zip-reader';
+import { Viewer } from './viewer';
 
-// Tree node được build từ flat list. children dùng object để dedupe nhanh
-// khi insert; sẽ convert sang array khi render.
+// Tree node được build từ flat list. children dùng Map để dedupe nhanh
+// khi insert; convert sang array khi render.
 interface TreeNode {
   name: string;
   path: string;
@@ -62,19 +62,10 @@ interface FileTreeProps {
   entries: ZipEntryNode[];
 }
 
-interface ViewerState {
-  path: string;
-  loading: boolean;
-  content: string;
-  truncated: boolean;
-  isBinary: boolean;
-  size: number;
-}
-
 export function FileTree({ skillId, entries }: FileTreeProps) {
   const tree = useMemo(() => buildTree(entries), [entries]);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['']));
-  const [viewer, setViewer] = useState<ViewerState | null>(null);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   const toggle = (path: string) => {
     setExpanded((s) => {
@@ -85,21 +76,6 @@ export function FileTree({ skillId, entries }: FileTreeProps) {
     });
   };
 
-  const openFile = async (path: string) => {
-    setViewer({ path, loading: true, content: '', truncated: false, isBinary: false, size: 0 });
-    try {
-      const res = await fetch(
-        `/api/skills/${skillId}/file?path=${encodeURIComponent(path)}`,
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to load');
-      setViewer({ path, loading: false, ...data });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Không đọc được file');
-      setViewer(null);
-    }
-  };
-
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[18rem_1fr] gap-4">
       {/* Tree panel */}
@@ -108,16 +84,19 @@ export function FileTree({ skillId, entries }: FileTreeProps) {
           nodes={sortedChildren(tree)}
           depth={0}
           expanded={expanded}
-          activePath={viewer?.path ?? null}
+          activePath={selectedPath}
           onToggle={toggle}
-          onOpenFile={openFile}
+          onOpenFile={setSelectedPath}
         />
       </div>
 
-      {/* Viewer panel */}
-      <div className="rounded-xl bg-white ring-1 ring-zinc-200 min-h-[20rem] flex flex-col">
-        {!viewer && <ViewerPlaceholder />}
-        {viewer && <Viewer state={viewer} />}
+      {/* Viewer panel — fixed max height, internal scroll */}
+      <div className="rounded-xl bg-white ring-1 ring-zinc-200 max-h-[70vh] overflow-hidden flex flex-col">
+        {selectedPath ? (
+          <Viewer skillId={skillId} path={selectedPath} />
+        ) : (
+          <ViewerPlaceholder />
+        )}
       </div>
     </div>
   );
@@ -180,42 +159,8 @@ function TreeChildren({ nodes, depth, expanded, activePath, onToggle, onOpenFile
 
 function ViewerPlaceholder() {
   return (
-    <div className="flex-1 flex items-center justify-center text-sm text-zinc-400">
+    <div className="h-full min-h-[20rem] flex items-center justify-center text-sm text-zinc-400">
       Chọn 1 file từ cây bên trái để xem nội dung
-    </div>
-  );
-}
-
-function Viewer({ state }: { state: ViewerState }) {
-  if (state.loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-sm text-zinc-500">
-        <Loader2 className="size-4 animate-spin mr-2" />
-        Đang tải...
-      </div>
-    );
-  }
-
-  if (state.isBinary) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center text-sm text-zinc-500 gap-1">
-        <p className="font-medium text-zinc-700">{state.path}</p>
-        <p>File binary — không hiển thị text.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="px-3 py-2 border-b border-zinc-200 flex items-center justify-between text-xs text-zinc-500">
-        <span className="font-mono truncate">{state.path}</span>
-        {state.truncated && (
-          <span className="text-amber-600">(đã cắt — file lớn hơn 1MB)</span>
-        )}
-      </div>
-      <pre className="flex-1 overflow-auto px-3 py-2 text-xs leading-relaxed font-mono text-zinc-800 whitespace-pre">
-        {state.content}
-      </pre>
     </div>
   );
 }

@@ -64,3 +64,27 @@ export function isSafeZipEntryPath(path: string): boolean {
   if (path.includes('..')) return false;
   return /^[a-zA-Z0-9._/\- ]+$/.test(path);
 }
+
+// Whitelist nhỏ — đủ cho mọi case skill bundle thực tế. Không cover hết
+// vì content-type chỉ là hint cho browser, không phải bảo mật.
+const MIME_MAP: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  bmp: 'image/bmp',
+  ico: 'image/x-icon',
+  pdf: 'application/pdf',
+  json: 'application/json',
+  txt: 'text/plain',
+  md: 'text/markdown',
+};
+
+export function mimeFromPath(path: string): string {
+  const m = path.toLowerCase().match(/\.([a-z0-9]+)$/);
+  const ext = m?.[1];
+  if (ext && MIME_MAP[ext]) return MIME_MAP[ext];
+  return 'application/octet-stream';
+}

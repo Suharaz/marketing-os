@@ -74,3 +74,17 @@ export function readZipEntryText(
     size,
   };
 }
+
+/**
+ * Đọc raw Buffer của 1 entry — dùng cho image/binary preview.
+ * Trả null nếu entry không tồn tại hoặc là directory.
+ */
+export function readZipEntryRaw(
+  absolutePath: string,
+  entryPath: string,
+): { data: Buffer; size: number } | null {
+  const zip = new AdmZip(absolutePath);
+  const entry = zip.getEntry(entryPath);
+  if (!entry || entry.isDirectory) return null;
+  return { data: entry.getData(), size: entry.header.size };
+}
