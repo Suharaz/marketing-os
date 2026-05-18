@@ -2,7 +2,10 @@
 // Fetch trang đầu, render grid cards. Load-more để client (sau này nếu cần).
 
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { listSkills } from '@/lib/queries/skill-lib';
+import { getCurrentUser } from '@/lib/auth/get-session';
+import { getUserRole } from '@/lib/auth/get-role';
 import { SkillCard } from './skill-card';
 import { UploadButton } from './upload-button';
 
@@ -13,7 +16,14 @@ export const metadata: Metadata = {
 const NUMBER_FMT = new Intl.NumberFormat('vi-VN');
 
 export default async function SkillsPage() {
-  const { items } = await listSkills(null);
+  const user = await getCurrentUser();
+  if (!user) redirect('/login');
+
+  const [{ items }, role] = await Promise.all([
+    listSkills(null),
+    getUserRole(user.userId),
+  ]);
+  const isAdmin = role === 'admin';
 
   return (
     <div className="flex flex-col gap-6">
@@ -36,7 +46,11 @@ export default async function SkillsPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {items.map((s) => (
-            <SkillCard key={s.id} skill={s} />
+            <SkillCard
+              key={s.id}
+              skill={s}
+              canDelete={isAdmin || s.uploaded_by === user.userId}
+            />
           ))}
         </div>
       )}

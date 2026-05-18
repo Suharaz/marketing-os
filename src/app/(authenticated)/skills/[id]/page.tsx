@@ -103,13 +103,22 @@ export default async function SkillDetailPage({ params }: PageProps) {
       {fileMissing || !tree ? (
         <div className="rounded-xl bg-amber-50 ring-1 ring-amber-200 px-4 py-4 flex items-start gap-3">
           <AlertTriangle className="size-5 text-amber-600 shrink-0 mt-0.5" />
-          <div className="text-sm text-amber-900">
+          <div className="text-sm text-amber-900 flex-1 min-w-0">
             <p className="font-semibold">File skill không còn trên server.</p>
             <p className="mt-1 text-amber-800">
               Có thể server đã được deploy lại mà volume lưu trữ chưa persist
               (host bind <code>./data/skills</code> chưa được mount, hoặc owner UID
               chưa khớp 1001). Bạn nên xoá row mồ côi này và upload lại file.
             </p>
+            <div className="mt-3 flex items-center gap-3">
+              {canDelete ? (
+                <DeleteButton skillId={skill.id} skillName={skill.name} />
+              ) : (
+                <p className="text-xs italic text-amber-700">
+                  Bạn không phải owner hoặc admin nên không xoá được. Liên hệ admin để dọn.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       ) : (
