@@ -30,7 +30,8 @@ export type SyncTypeT =
   | 'posts'
   | 'health_recompute'
   | 'manual_refresh'
-  | 'ladipage';
+  | 'ladipage'
+  | 'news_ingestion';
 
 export type SyncStatusT = 'running' | 'success' | 'failed';
 

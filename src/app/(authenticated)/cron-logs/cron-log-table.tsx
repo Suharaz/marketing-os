@@ -31,6 +31,7 @@ const JOB_LABEL: Record<SyncTypeT, string> = {
   health_recompute: 'Health recompute',
   manual_refresh: 'Manual refresh',
   ladipage: 'Ladipage sync',
+  news_ingestion: 'News ingestion',
 };
 
 function formatTime(iso: string | null): string {

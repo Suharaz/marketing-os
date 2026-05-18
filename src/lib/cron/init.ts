@@ -7,6 +7,7 @@ import { runPageInsightsJob } from '@/lib/cron/job-page-insights';
 import { runPostsIngestionJob } from '@/lib/cron/job-posts-ingestion';
 import { runHealthRecomputeJob } from '@/lib/cron/job-health-recompute';
 import { runLadipageSyncJob } from '@/lib/cron/job-ladipage-sync';
+import { runNewsIngestionJob } from '@/lib/cron/job-news-ingestion';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -64,11 +65,19 @@ export function initCrons(): void {
     { timezone: 'Asia/Ho_Chi_Minh' }
   );
 
+  // Job E: News ingestion — mỗi giờ, phút 15 (lệch khỏi phút 0/30 của
+  // job khác để tránh đụng DB + CPU spike cùng lúc).
+  cron.schedule('15 * * * *', () => {
+    runNewsIngestionJob().catch((err) =>
+      console.error('[cron] job-news-ingestion uncaught error:', err)
+    );
+  });
+
   globalThis.__cron_initialized = true;
 
   const now = new Date();
   console.log(
-    `[cron] 4 jobs scheduled at ${now.toISOString()} ` +
+    `[cron] 5 jobs scheduled at ${now.toISOString()} ` +
       `(container TZ offset=${-now.getTimezoneOffset() / 60}h, ` +
       `process.env.TZ=${process.env.TZ ?? 'unset'})`
   );
@@ -89,6 +98,7 @@ export function initCrons(): void {
   console.log('  - posts_ingestion:  30 2,10,18 * * *  (UTC)');
   console.log('  - health_recompute: 0 3 * * *         (UTC)');
   console.log('  - ladipage_sync:    30 23 * * *       (Asia/Ho_Chi_Minh)');
+  console.log('  - news_ingestion:   15 * * * *        (UTC, hourly)');
 
   // Boot-time heartbeat: log every 60s for the first 5 minutes so an
   // operator looking at `docker logs` after deploy can confirm the Node
