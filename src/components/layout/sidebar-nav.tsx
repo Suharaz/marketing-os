@@ -12,6 +12,7 @@ import {
   Inbox,
   Activity,
   Package,
+  Newspaper,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/auth/session-config';
 import { UserMenu } from './user-menu';
@@ -23,6 +24,7 @@ const BASE_ITEMS = [
   { href: '/library', label: 'Thư viện', icon: BookOpen },
   { href: '/skills', label: 'Thư viện Skill', icon: Package },
   { href: '/revenue', label: 'Doanh thu', icon: Wallet },
+  { href: '/news', label: 'Tin tức AI', icon: Newspaper },
 ];
 
 const ADMIN_ITEMS = [
