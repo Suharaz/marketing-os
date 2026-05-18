@@ -157,3 +157,18 @@ export interface Alert {
   is_read: boolean;
   created_at: Date;
 }
+
+export interface SkillLib {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  original_filename: string;
+  size_bytes: number;
+  sha256: string;
+  /** Relative path under SKILL_STORAGE_PATH, ví dụ `<uuid>.zip`. Tránh
+   *  hard-code absolute path để dễ migrate sang S3 sau (chỉ đổi prefix). */
+  storage_path: string;
+  uploaded_by: string | null;
+  created_at: Date;
+}

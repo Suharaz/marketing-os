@@ -11,6 +11,7 @@ import {
   Users,
   Inbox,
   Activity,
+  Package,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/auth/session-config';
 import { UserMenu } from './user-menu';
@@ -20,6 +21,7 @@ const BASE_ITEMS = [
   { href: '/briefs', label: 'Xưởng nội dung', icon: Inbox },
   { href: '/channels', label: 'Kênh', icon: Radio },
   { href: '/library', label: 'Thư viện', icon: BookOpen },
+  { href: '/skills', label: 'Thư viện Skill', icon: Package },
   { href: '/revenue', label: 'Doanh thu', icon: Wallet },
 ];
 

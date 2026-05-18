@@ -12,8 +12,11 @@ const COOKIE_NAME = 'mos_session';
 // ttl must match sessionOptions (7 days in seconds = 604800)
 const SESSION_TTL = 60 * 60 * 24 * 7;
 
+// `api/skills/upload` được loại trừ vì Next.js 16 proxy default buffer
+// 10MB body (proxyClientMaxBodySize) — sẽ truncate file lớn. Route handler
+// tự check session bên trong nên không mất bảo mật.
 export const config = {
-  matcher: ['/((?!api/auth|_next|favicon.ico|public|login).*)'],
+  matcher: ['/((?!api/auth|api/skills/upload|_next|favicon.ico|public|login).*)'],
 };
 
 export async function proxy(request: NextRequest): Promise<NextResponse> {
