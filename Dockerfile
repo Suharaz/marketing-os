@@ -75,6 +75,13 @@ COPY --from=deps --chown=nextjs:nodejs /app/node_modules/pgpass ./node_modules/p
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/pg-connection-string ./node_modules/pg-connection-string
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/node-cron ./node_modules/node-cron
 
+# Skill library storage. WORKDIR `/app` is root-owned, so the runtime
+# `mkdir -p /app/storage/skills` from ensureStorageDir() would fail with
+# EACCES when running as nextjs (UID 1001). Pre-create here with the right
+# ownership. If a host volume is mounted at this path, the host dir itself
+# must be owned by UID 1001 to remain writable.
+RUN mkdir -p /app/storage/skills && chown -R nextjs:nodejs /app/storage
+
 USER nextjs
 EXPOSE 3000
 
