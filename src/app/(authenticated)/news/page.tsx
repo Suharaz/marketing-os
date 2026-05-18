@@ -8,6 +8,7 @@ import { getAiNews } from '@/lib/news/fetch-news';
 import { VALID_SOURCE_IDS } from '@/lib/news/sources';
 import { NewsItemCard } from './news-item-card';
 import { NewsSourceTabs } from './news-source-tabs';
+import { NewsFetchNowButton } from './news-fetch-now-button';
 
 export const metadata: Metadata = {
   title: 'Tin tức AI — Marketing OS',
@@ -41,9 +42,12 @@ export default async function NewsPage({ searchParams }: NewsPageProps) {
             Tổng hợp từ VentureBeat · TechCrunch · The Verge · Marktechpost · cập nhật mỗi giờ
           </p>
         </div>
-        <p className="text-xs text-zinc-500 shrink-0">
-          {NUMBER_FMT.format(items.length)} bài
-        </p>
+        <div className="flex items-center gap-3 shrink-0">
+          <p className="text-xs text-zinc-500">
+            {NUMBER_FMT.format(items.length)} bài
+          </p>
+          <NewsFetchNowButton />
+        </div>
       </div>
 
       {/* Source tabs */}
