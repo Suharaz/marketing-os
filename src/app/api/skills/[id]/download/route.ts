@@ -28,7 +28,15 @@ export async function GET(_req: NextRequest, ctx: Params): Promise<Response> {
     }
 
     const fullPath = resolveSkillPath(storage.storage_path);
-    const st = await stat(fullPath); // 404 nếu file mất trên disk
+    let st;
+    try {
+      st = await stat(fullPath);
+    } catch {
+      return NextResponse.json(
+        { error: 'File missing on disk', code: 'SKILL_FILE_MISSING' },
+        { status: 404 },
+      );
+    }
 
     // Stream Node → Web stream. Tránh load full file vào RAM khi user
     // tải file vài GB.

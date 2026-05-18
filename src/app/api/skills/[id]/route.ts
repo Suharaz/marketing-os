@@ -9,7 +9,7 @@ import {
   getSkillStoragePath,
   deleteSkill,
 } from '@/lib/queries/skill-lib';
-import { readZipTree } from '@/lib/skill-lib/zip-reader';
+import { readZipTree, SkillFileMissingError } from '@/lib/skill-lib/zip-reader';
 import { resolveSkillPath, deleteFile } from '@/lib/skill-lib/storage';
 
 export const runtime = 'nodejs';
@@ -44,6 +44,12 @@ export async function GET(_req: NextRequest, ctx: Params): Promise<NextResponse>
     const tree = readZipTree(resolveSkillPath(storage.storage_path));
     return NextResponse.json({ skill, tree });
   } catch (err) {
+    if (err instanceof SkillFileMissingError) {
+      return NextResponse.json(
+        { error: 'File missing on disk', code: err.code },
+        { status: 404 },
+      );
+    }
     console.error('[GET /api/skills/[id]]', err);
     const msg = err instanceof Error ? err.message : 'Failed to load skill';
     return NextResponse.json({ error: msg }, { status: 500 });

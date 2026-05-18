@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getSkillStoragePath } from '@/lib/queries/skill-lib';
-import { readZipEntryRaw } from '@/lib/skill-lib/zip-reader';
+import { readZipEntryRaw, SkillFileMissingError } from '@/lib/skill-lib/zip-reader';
 import { resolveSkillPath } from '@/lib/skill-lib/storage';
 import { isSafeZipEntryPath, mimeFromPath } from '@/lib/skill-lib/validate';
 
@@ -50,6 +50,12 @@ export async function GET(req: NextRequest, ctx: Params): Promise<Response> {
       },
     });
   } catch (err) {
+    if (err instanceof SkillFileMissingError) {
+      return NextResponse.json(
+        { error: 'File missing on disk', code: err.code },
+        { status: 404 },
+      );
+    }
     console.error('[GET /api/skills/[id]/raw]', err);
     return NextResponse.json({ error: 'Failed to read entry' }, { status: 500 });
   }

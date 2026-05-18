@@ -7,6 +7,25 @@
 // 10GB và list chậm, có thể đổi sang `yauzl` (streaming) — nhưng giờ KISS.
 
 import AdmZip from 'adm-zip';
+import { existsSync } from 'node:fs';
+
+/**
+ * Class riêng để API/UI layer phân biệt giữa "file mất trên disk" và lỗi khác.
+ * Thường xảy ra khi Coolify/Docker deploy mới mà volume chưa persist.
+ */
+export class SkillFileMissingError extends Error {
+  readonly code = 'SKILL_FILE_MISSING' as const;
+  constructor(absolutePath: string) {
+    super(`Skill file missing on disk: ${absolutePath}`);
+    this.name = 'SkillFileMissingError';
+  }
+}
+
+function assertFileExists(absolutePath: string): void {
+  // Sync existsSync OK ở đây vì nó nhanh + tránh race race-condition với
+  // adm-zip's internal sync open. Refactor sang async khi adm-zip có API async.
+  if (!existsSync(absolutePath)) throw new SkillFileMissingError(absolutePath);
+}
 
 export interface ZipEntryNode {
   path: string;              // full path trong zip, vd `skills/foo/bar.md`
@@ -20,6 +39,7 @@ export interface ZipEntryNode {
  * mảng này bằng cách split path theo `/`. Trả flat dễ serialize JSON hơn.
  */
 export function readZipTree(absolutePath: string): ZipEntryNode[] {
+  assertFileExists(absolutePath);
   const zip = new AdmZip(absolutePath);
   return zip.getEntries().map((e) => ({
     path: e.entryName,
@@ -49,6 +69,7 @@ export function readZipEntryText(
   absolutePath: string,
   entryPath: string,
 ): EntryReadResult | null {
+  assertFileExists(absolutePath);
   const zip = new AdmZip(absolutePath);
   const entry = zip.getEntry(entryPath);
   if (!entry || entry.isDirectory) return null;
@@ -83,6 +104,7 @@ export function readZipEntryRaw(
   absolutePath: string,
   entryPath: string,
 ): { data: Buffer; size: number } | null {
+  assertFileExists(absolutePath);
   const zip = new AdmZip(absolutePath);
   const entry = zip.getEntry(entryPath);
   if (!entry || entry.isDirectory) return null;

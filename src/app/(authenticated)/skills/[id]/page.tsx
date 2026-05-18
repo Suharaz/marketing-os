@@ -7,7 +7,9 @@ import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getUserRole } from '@/lib/auth/get-role';
 import { getSkillById, getSkillStoragePath } from '@/lib/queries/skill-lib';
-import { readZipTree } from '@/lib/skill-lib/zip-reader';
+import { readZipTree, SkillFileMissingError } from '@/lib/skill-lib/zip-reader';
+import type { ZipEntryNode } from '@/lib/skill-lib/zip-reader';
+import { AlertTriangle } from 'lucide-react';
 import { resolveSkillPath } from '@/lib/skill-lib/storage';
 import { Button } from '@/components/ui/button';
 import { FileTree } from './file-tree';
@@ -35,7 +37,20 @@ export default async function SkillDetailPage({ params }: PageProps) {
 
   if (!skill || !storage) notFound();
 
-  const tree = readZipTree(resolveSkillPath(storage.storage_path));
+  // File có thể đã mất trên disk nếu Coolify deploy không mount persistent
+  // volume — không crash page, để user thấy thông tin metadata + nút delete
+  // để dọn row mồ côi.
+  let tree: ZipEntryNode[] | null = null;
+  let fileMissing = false;
+  try {
+    tree = readZipTree(resolveSkillPath(storage.storage_path));
+  } catch (err) {
+    if (err instanceof SkillFileMissingError) {
+      fileMissing = true;
+    } else {
+      throw err; // lỗi khác (zip corrupt, …) vẫn để Next.js error boundary xử
+    }
+  }
 
   const isOwner = skill.uploaded_by === user.userId;
   const isAdmin = role === 'admin';
@@ -84,8 +99,22 @@ export default async function SkillDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Tree + viewer */}
-      <FileTree skillId={skill.id} entries={tree} />
+      {/* Tree + viewer hoặc warning nếu file mất */}
+      {fileMissing || !tree ? (
+        <div className="rounded-xl bg-amber-50 ring-1 ring-amber-200 px-4 py-4 flex items-start gap-3">
+          <AlertTriangle className="size-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="text-sm text-amber-900">
+            <p className="font-semibold">File skill không còn trên server.</p>
+            <p className="mt-1 text-amber-800">
+              Có thể server đã được deploy lại mà volume lưu trữ chưa persist
+              (host bind <code>./data/skills</code> chưa được mount, hoặc owner UID
+              chưa khớp 1001). Bạn nên xoá row mồ côi này và upload lại file.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <FileTree skillId={skill.id} entries={tree} />
+      )}
     </div>
   );
 }
