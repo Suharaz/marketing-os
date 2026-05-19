@@ -10,8 +10,8 @@ export interface ChannelListItem {
   lastSyncedAt: string | null;
   followers: number | null;
   healthScore: number | null;
-  // Avg reach per post (tính trên post_metric_daily 30 ngày gần nhất, một row/post)
-  avgReachPerPost: number | null;
+  // Tổng reach 7 ngày gần nhất (không tính ngày hiện tại), lấy từ account_metric_daily.total_reach
+  reach7d: number | null;
   // Engagement rate trung bình (đơn vị: tỉ lệ — render UI nhân 100 thành %)
   avgEngagementRate: number | null;
   // Tên người quản lý kênh (team_member.name) — null nếu chưa gán
@@ -46,14 +46,14 @@ export async function fetchChannelsList(
     last_synced_at: string | null;
     followers: string | null;
     health_score: string | null;
-    avg_reach_per_post: string | null;
+    reach_7d: string | null;
     avg_engagement_rate: string | null;
     owner_name: string | null;
     lead_30d: string;
   }>(
     `SELECT sa.id, sa.external_id, sa.name, sa.platform, sa.status, sa.last_synced_at,
             am.followers, ch.health_score,
-            pm.avg_reach_per_post, pm.avg_engagement_rate,
+            rch.reach_7d, pm.avg_engagement_rate,
             tm.name AS owner_name,
             lc.lead_30d
      FROM social_account sa
@@ -65,12 +65,20 @@ export async function fetchChannelsList(
        SELECT health_score FROM channel_health_daily
        WHERE account_id = sa.id ORDER BY date DESC LIMIT 1
      ) ch ON TRUE
-     -- Avg reach + ER trên post_metric_daily 30 ngày, lấy row mới nhất per-post
+     -- Tổng reach 7 ngày gần nhất (loại trừ ngày hiện tại) từ account_metric_daily.total_reach.
+     -- NULL nếu không có row → render '—' trên UI. SUM trả 0 khi có row nhưng total_reach = 0.
      LEFT JOIN LATERAL (
-       SELECT AVG(p.reach)::INT             AS avg_reach_per_post,
-              AVG(p.engagement_rate)::NUMERIC AS avg_engagement_rate
+       SELECT SUM(total_reach)::BIGINT AS reach_7d
+       FROM account_metric_daily
+       WHERE account_id = sa.id
+         AND date >= CURRENT_DATE - INTERVAL '7 days'
+         AND date <  CURRENT_DATE
+     ) rch ON TRUE
+     -- ER trung bình trên post_metric_daily 30 ngày, lấy row mới nhất per-post
+     LEFT JOIN LATERAL (
+       SELECT AVG(p.engagement_rate)::NUMERIC AS avg_engagement_rate
        FROM (
-         SELECT DISTINCT ON (sp.id) pmd.reach, pmd.engagement_rate
+         SELECT DISTINCT ON (sp.id) pmd.engagement_rate
          FROM social_post sp
          JOIN post_metric_daily pmd ON pmd.post_id = sp.id
          WHERE sp.account_id = sa.id
@@ -109,8 +117,7 @@ export async function fetchChannelsList(
     lastSyncedAt: row.last_synced_at,
     followers: row.followers !== null ? Number(row.followers) : null,
     healthScore: row.health_score !== null ? Number(row.health_score) : null,
-    avgReachPerPost:
-      row.avg_reach_per_post !== null ? Number(row.avg_reach_per_post) : null,
+    reach7d: row.reach_7d !== null ? Number(row.reach_7d) : null,
     avgEngagementRate:
       row.avg_engagement_rate !== null ? Number(row.avg_engagement_rate) : null,
     ownerName: row.owner_name,

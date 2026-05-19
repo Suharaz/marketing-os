@@ -96,10 +96,11 @@ export function ChannelCard({ channel }: Props) {
         </div>
       </div>
 
-      {/* ─── Stats row 4 cột: Followers · Reach/post · ER · Lead ─── */}
+      {/* ─── Stats row 4 cột: Followers · Reach · ER · Lead ─── */}
+      {/* Reach = SUM(total_reach) 7 ngày gần nhất, không tính ngày hiện tại */}
       <div className="mt-4 grid grid-cols-4 gap-2 border-t border-zinc-100 pt-3">
         <Stat label="Followers" value={formatCompact(channel.followers)} />
-        <Stat label="Reach/post" value={formatCompact(channel.avgReachPerPost)} />
+        <Stat label="Reach" value={formatCompact(channel.reach7d)} />
         <Stat label="ER" value={formatPercent(channel.avgEngagementRate)} />
         <Stat label="Lead" value={formatCompact(channel.lead30d)} />
       </div>
