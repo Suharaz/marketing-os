@@ -134,6 +134,18 @@ export async function fetchChannel(id: string): Promise<ChannelAccount | null> {
 }
 
 export async function fetchMetrics7d(accountId: string): Promise<ChannelMetricDay[]> {
+  return fetchMetricsRange(accountId, 7);
+}
+
+/**
+ * Parameterized version của fetchMetrics7d — N ngày gần nhất (exclude today).
+ * Khoảng: [CURRENT_DATE - days, CURRENT_DATE - 1] → `days` data points.
+ * Caller phải validate `days` ở tool layer (allowlist 7/14/30/90).
+ */
+export async function fetchMetricsRange(
+  accountId: string,
+  days: number
+): Promise<ChannelMetricDay[]> {
   // Lấy 7 ngày gần nhất NHƯNG loại trừ hôm nay (data hôm nay chưa đủ → tránh tụt cuối chart)
   // Khoảng: [CURRENT_DATE - 7, CURRENT_DATE - 1] → 7 điểm dữ liệu
   //
@@ -159,15 +171,15 @@ export async function fetchMetrics7d(accountId: string): Promise<ChannelMetricDa
        FROM social_post
        WHERE account_id = $1
          AND published_at IS NOT NULL
-         AND published_at >= (CURRENT_DATE - INTERVAL '7 days')::timestamptz
+         AND published_at >= (CURRENT_DATE - ($2::int))::timestamptz
          AND published_at <  CURRENT_DATE::timestamptz
        GROUP BY 1
      ) pc ON pc.date = amd.date
      WHERE amd.account_id = $1
-       AND amd.date >= CURRENT_DATE - INTERVAL '7 days'
+       AND amd.date >= CURRENT_DATE - $2::int
        AND amd.date < CURRENT_DATE
      ORDER BY amd.date ASC`,
-    [accountId]
+    [accountId, days]
   );
 
   return res.rows.map((row) => ({
