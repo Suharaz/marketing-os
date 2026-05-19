@@ -70,6 +70,8 @@ export function ManualConnectForm() {
   const [pageId, setPageId] = useState('');
   const [name, setName] = useState('');
   const [pageToken, setPageToken] = useState('');
+  // KPI số bài đăng / ngày — dashboard tự nhân lên theo time range
+  const [kpiPostsPerDay, setKpiPostsPerDay] = useState('1');
   const [testing, setTesting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<TestResult | null>(null);
@@ -117,6 +119,13 @@ export function ManualConnectForm() {
       return;
     }
 
+    // Parse KPI — empty/NaN → fallback 1 (default trên DB)
+    const kpiNum = parseInt(kpiPostsPerDay, 10);
+    if (kpiPostsPerDay && (isNaN(kpiNum) || kpiNum < 0 || kpiNum > 100)) {
+      toast.error('KPI phải là số nguyên từ 0 đến 100');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await fetch('/api/channels', {
@@ -126,6 +135,7 @@ export function ManualConnectForm() {
           pageId: pageId.trim(),
           pageToken: pageToken.trim(),
           name: name.trim(),
+          kpiPostsPerDay: isNaN(kpiNum) ? 1 : kpiNum,
         }),
       });
 
@@ -188,6 +198,26 @@ export function ManualConnectForm() {
           autoComplete="off"
           disabled={submitting}
         />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="kpiPostsPerDay">KPI bài đăng / ngày</Label>
+        <Input
+          id="kpiPostsPerDay"
+          type="number"
+          min="0"
+          max="100"
+          step="1"
+          value={kpiPostsPerDay}
+          onChange={(e) => setKpiPostsPerDay(e.target.value)}
+          placeholder="1"
+          disabled={submitting}
+          className="max-w-[120px]"
+        />
+        <p className="text-xs text-zinc-500">
+          Dashboard tự nhân theo time range: 1 bài/ngày = 7 bài/tuần = 30 bài/tháng.
+          Có thể chỉnh sau ở trang chi tiết kênh.
+        </p>
       </div>
 
       <div className="flex flex-col gap-1.5">

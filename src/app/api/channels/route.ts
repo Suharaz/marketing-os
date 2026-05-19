@@ -14,6 +14,8 @@ const channelSchema = z.object({
   pageId: z.string().min(1),
   pageToken: z.string().min(1),
   name: z.string().min(1).max(255),
+  // KPI số bài đăng / ngày — optional khi tạo, default 1 ở DB nếu không gửi
+  kpiPostsPerDay: z.number().int().min(0).max(100).optional(),
 });
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -37,25 +39,29 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const { pageId, pageToken, name } = parsed.data;
+  const { pageId, pageToken, name, kpiPostsPerDay } = parsed.data;
 
   try {
     // Encrypt page token via pgcrypto — never store plaintext
     const encryptedToken = await encryptToken(pageToken);
 
+    // Default 1 = 1 bài/ngày (match DB column default) khi client không gửi KPI
+    const kpi = kpiPostsPerDay ?? 1;
+
     const result = await db.query<{ id: string }>(
       `INSERT INTO social_account
-         (platform, external_id, name, access_token_encrypted, status, owner_member_id)
-       VALUES ('facebook', $1, $2, $3, 'active', $4)
+         (platform, external_id, name, access_token_encrypted, status, owner_member_id, kpi_posts_per_day)
+       VALUES ('facebook', $1, $2, $3, 'active', $4, $5)
        ON CONFLICT (platform, external_id)
        DO UPDATE SET
          name                    = EXCLUDED.name,
          access_token_encrypted  = EXCLUDED.access_token_encrypted,
          status                  = 'active',
          owner_member_id         = EXCLUDED.owner_member_id,
+         kpi_posts_per_day       = EXCLUDED.kpi_posts_per_day,
          connected_at            = NOW()
        RETURNING id`,
-      [pageId, name, encryptedToken, user.userId]
+      [pageId, name, encryptedToken, user.userId, kpi]
     );
 
     const accountId = result.rows[0]?.id;

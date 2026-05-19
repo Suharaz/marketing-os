@@ -1,12 +1,12 @@
 import { Metadata } from 'next';
 import { getKpiData, getTrendData } from '@/lib/cache/dashboard-cache';
-import { fetchChannelHealth } from '@/lib/queries/dashboard-channel-health';
+import { fetchChannelsTable } from '@/lib/queries/dashboard-channels-table';
 import { fetchUnreadAlerts } from '@/lib/queries/alerts';
 import { fetchTopPerformers } from '@/lib/queries/dashboard-top-performers';
 import { parseRangeParam } from '@/lib/dashboard/time-range';
 import { KpiHeroGrid } from '@/components/dashboard/kpi-hero-grid';
 import { PerformanceTrendChart } from '@/components/dashboard/performance-trend-chart';
-import { ChannelHealthGrid } from '@/components/dashboard/channel-health-grid';
+import { ChannelsTable } from '@/components/dashboard/channels-table';
 import { TopPerformersRankedList } from '@/components/dashboard/top-performers-ranked-list';
 import { ActiveCampaignsList } from '@/components/dashboard/active-campaigns-list';
 import { AlertsFeed } from '@/components/dashboard/alerts-feed';
@@ -25,10 +25,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const days = parseRangeParam(params.range);
 
   // Fetch in parallel — independent queries, no shared state.
-  const [kpi, trend, health, alerts, topPerformers] = await Promise.all([
+  const [kpi, trend, channels, alerts, topPerformers] = await Promise.all([
     getKpiData(days),
     getTrendData(days),
-    fetchChannelHealth(),
+    fetchChannelsTable(days),
     fetchUnreadAlerts(10),
     fetchTopPerformers(days, 5),
   ]);
@@ -49,18 +49,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       {/* Tier 1: 4 KPI cards with sparklines */}
       <KpiHeroGrid data={kpi} days={days} trend={trend} />
 
-      {/* Tier 2: Performance trend (2/3) + Channel Health (1/3).
-          On <lg, both stack full-width. */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <PerformanceTrendChart data={trend} days={days} />
-        </div>
-        <div className="lg:col-span-1">
-          <ChannelHealthGrid data={health} />
-        </div>
-      </div>
+      {/* Tier 2: Performance trend full-width */}
+      <PerformanceTrendChart data={trend} days={days} />
 
-      {/* Tier 3: Top Performers / Alerts / Active Campaigns.
+      {/* Tier 3: Chanel table full-width (replaces sidebar Channel Health widget) */}
+      <ChannelsTable data={channels} days={days} />
+
+      {/* Tier 4: Top Performers / Alerts / Active Campaigns.
           On <lg, stack full-width. On md, 2-col with campaigns wrapping. */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <TopPerformersRankedList performers={topPerformers} days={days} />

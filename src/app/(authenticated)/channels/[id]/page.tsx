@@ -69,6 +69,7 @@ export default async function ChannelDetailPage({ params }: PageProps) {
         ownerId={account.ownerId}
         ownerName={account.owner?.name ?? null}
         members={members}
+        kpiPostsPerDay={account.kpiPostsPerDay}
         isAdmin={isAdmin}
       />
 

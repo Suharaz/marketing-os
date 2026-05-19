@@ -19,6 +19,8 @@ export interface ChannelAccount {
   personaJson: Record<string, unknown> | null;
   followers: number | null;
   healthScore: number | null;
+  // KPI số bài đăng / ngày — dashboard nhân theo time range
+  kpiPostsPerDay: number;
   // Người trong team đang phụ trách kênh — null nếu owner đã bị xóa khỏi team
   owner: ChannelOwner | null;
   // Raw FK — dùng cho OwnerSelector dropdown (giữ riêng để frontend không phải dò owner.id)
@@ -84,13 +86,14 @@ export async function fetchChannel(id: string): Promise<ChannelAccount | null> {
     persona_json: Record<string, unknown> | null;
     followers: string | null;
     health_score: string | null;
+    kpi_posts_per_day: number;
     owner_member_id: string | null;
     owner_name: string | null;
     owner_email: string | null;
     owner_role: string | null;
   }>(
     `SELECT sa.id, sa.external_id, sa.name, sa.platform, sa.status, sa.last_synced_at, sa.persona_json,
-            sa.owner_member_id,
+            sa.owner_member_id, sa.kpi_posts_per_day,
             am.followers, ch.health_score,
             tm.name AS owner_name, tm.email AS owner_email, tm.role AS owner_role
      FROM social_account sa
@@ -120,6 +123,7 @@ export async function fetchChannel(id: string): Promise<ChannelAccount | null> {
     personaJson: row.persona_json,
     followers: row.followers !== null ? Number(row.followers) : null,
     healthScore: row.health_score !== null ? Number(row.health_score) : null,
+    kpiPostsPerDay: Number(row.kpi_posts_per_day),
     ownerId: row.owner_member_id,
     owner:
       row.owner_member_id && row.owner_name && row.owner_email && row.owner_role

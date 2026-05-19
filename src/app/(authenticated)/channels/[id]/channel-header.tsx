@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { OwnerSelector } from './owner-selector';
+import { KpiEditor } from './kpi-editor';
 import { StatusDot } from '../_components/status-dot';
 import { CopyIdButton } from '../_components/copy-id-button';
 import { PlatformIcon } from '../_components/platform-icon';
@@ -34,6 +35,8 @@ interface Props {
   ownerId: string | null;
   ownerName: string | null;
   members: MemberOption[];
+  // KPI số bài đăng / ngày — chỉnh được qua KpiEditor
+  kpiPostsPerDay: number;
   // Quyền admin → mới được đổi owner & hủy kết nối kênh.
   // Non-admin chỉ thấy text owner read-only, không thấy nút Hủy kết nối.
   isAdmin: boolean;
@@ -49,6 +52,7 @@ export function ChannelHeader({
   ownerId,
   ownerName,
   members,
+  kpiPostsPerDay,
   isAdmin,
 }: Props) {
   const router = useRouter();
@@ -149,6 +153,11 @@ export function ChannelHeader({
                 {ownerName ?? <span className="italic text-zinc-400">Chưa gán</span>}
               </span>
             )}
+          </div>
+
+          {/* Row 4: KPI editor — số bài đăng mục tiêu / ngày */}
+          <div className="mt-3">
+            <KpiEditor accountId={accountId} initialKpiPerDay={kpiPostsPerDay} />
           </div>
         </div>
       </div>

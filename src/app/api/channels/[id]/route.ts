@@ -12,16 +12,24 @@ export const runtime = 'nodejs';
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Cả 2 field đều optional — client gửi field nào thì update field đó.
+// Tất cả field đều optional — client gửi field nào thì update field đó.
 // owner_member_id null nghĩa là "bỏ gán owner" (kênh thành mồ côi).
+// kpi_posts_per_day: số bài/ngày mục tiêu — non-admin cũng được sửa (kênh họ phụ trách).
 const patchSchema = z
   .object({
     persona_json: z.record(z.string(), z.unknown()).optional(),
     owner_member_id: z.string().uuid().nullable().optional(),
+    kpi_posts_per_day: z.number().int().min(0).max(100).optional(),
   })
-  .refine((d) => d.persona_json !== undefined || d.owner_member_id !== undefined, {
-    message: 'At least one of persona_json or owner_member_id required',
-  });
+  .refine(
+    (d) =>
+      d.persona_json !== undefined ||
+      d.owner_member_id !== undefined ||
+      d.kpi_posts_per_day !== undefined,
+    {
+      message: 'At least one field required',
+    }
+  );
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -81,6 +89,10 @@ export async function PATCH(
   if (parsed.data.owner_member_id !== undefined) {
     sets.push(`owner_member_id = $${i++}`);
     values.push(parsed.data.owner_member_id);
+  }
+  if (parsed.data.kpi_posts_per_day !== undefined) {
+    sets.push(`kpi_posts_per_day = $${i++}`);
+    values.push(parsed.data.kpi_posts_per_day);
   }
 
   values.push(id);
